@@ -96,6 +96,28 @@ class AskFactsPayload(RootModel[List[AskFact]]):
       ]
     """
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                [
+                    {"type": "true", "category": "entity", "object": "authority"},
+                    {
+                        "type": "false",
+                        "relationship": "contracting_authority",
+                        "parameter1": "contract",
+                        "parameter2": {"variable": "X"},
+                    },
+                    {
+                        "type": "unknown",
+                        "relationship": "estimated_expenditure",
+                        "parameter1": "contract",
+                        "parameter2": {"variable": "Amount"},
+                    },
+                ]
+            ]
+        }
+    )
+
 
 def ask_facts_payload_json_schema_dict() -> dict:
     """Return a JSON Schema dict for the ask endpoint request body (top-level list)."""

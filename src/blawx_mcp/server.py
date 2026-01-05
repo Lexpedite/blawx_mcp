@@ -130,9 +130,7 @@ async def _resolve_team_id(*, base_url: str, api_key: str, team_slug: str) -> in
 
 @mcp.tool()
 async def blawx_health() -> dict[str, Any]:
-    """Check Blawx app health endpoint using Api-Key auth.
-
-    Calls `GET {BLAWX_BASE_URL}/health/` with `Authorization: Api-Key <BLAWX_API_KEY>`.
+    """Check Blawx app health. 
     """
     settings = get_settings()
     base_url = settings.base_url
@@ -150,9 +148,7 @@ async def blawx_health() -> dict[str, Any]:
 
 @mcp.tool()
 async def blawx_ontology_list() -> dict[str, Any]:
-    """List ontology for the configured team/project.
-
-    Calls `GET /api/teams/{team_id}/projects/{project_id}/ontology/`.
+    """List ontology (available categories and relationships).
     """
     settings = get_settings()
     team_id = await _resolve_team_id(
@@ -164,9 +160,7 @@ async def blawx_ontology_list() -> dict[str, Any]:
 
 @mcp.tool()
 async def blawx_ontology_category_detail(category_id: int) -> dict[str, Any]:
-    """Get a specific ontology category by id.
-
-    Calls `GET /api/teams/{team_id}/projects/{project_id}/ontology/categories/{category_id}/`.
+    """Get category details by id obtained from blawx_ontology_list tool.
     """
     settings = get_settings()
     team_id = await _resolve_team_id(
@@ -178,9 +172,7 @@ async def blawx_ontology_category_detail(category_id: int) -> dict[str, Any]:
 
 @mcp.tool()
 async def blawx_ontology_relationship_detail(relationship_id: int) -> dict[str, Any]:
-    """Get a specific ontology relationship by id.
-
-    Calls `GET /api/teams/{team_id}/projects/{project_id}/ontology/relationships/{relationship_id}/`.
+    """Get relationship details by id obtained from blawx_ontology_list tool.
     """
     settings = get_settings()
     team_id = await _resolve_team_id(
@@ -192,9 +184,7 @@ async def blawx_ontology_relationship_detail(relationship_id: int) -> dict[str, 
 
 @mcp.tool()
 async def blawx_fact_scenarios_list() -> dict[str, Any]:
-    """List available fact scenarios (fact patterns) for the configured team/project.
-
-    Calls `GET /api/teams/{team_id}/projects/{project_id}/facts/`.
+    """List available fact scenarios for use in the blawx_ask_question_with_fact_scenario tool.
     """
     settings = get_settings()
     team_id = await _resolve_team_id(
@@ -206,9 +196,7 @@ async def blawx_fact_scenarios_list() -> dict[str, Any]:
 
 @mcp.tool()
 async def blawx_fact_scenario_detail(fact_scenario_id: int) -> dict[str, Any]:
-    """Get details for a specific fact scenario (fact pattern) by id.
-
-    Calls `GET /api/teams/{team_id}/projects/{project_id}/facts/{fact_scenario_id}/`.
+    """Get fact scenario details by id obtained from blawx_fact_scenarios_list tool.
     """
     settings = get_settings()
     team_id = await _resolve_team_id(
@@ -219,10 +207,8 @@ async def blawx_fact_scenario_detail(fact_scenario_id: int) -> dict[str, Any]:
 
 
 @mcp.tool()
-async def blawx_shared_questions_list() -> dict[str, Any]:
-    """List shared questions available in the configured team/project.
-
-    Calls `GET /api/teams/{team_id}/projects/{project_id}/questions/shared/`.
+async def blawx_questions_list() -> dict[str, Any]:
+    """List available questions.
     """
     settings = get_settings()
     team_id = await _resolve_team_id(
@@ -233,10 +219,8 @@ async def blawx_shared_questions_list() -> dict[str, Any]:
 
 
 @mcp.tool()
-async def blawx_shared_question_detail(question_id: int) -> dict[str, Any]:
-    """Get details for a specific shared question.
-
-    Calls `GET /api/teams/{team_id}/projects/{project_id}/questions/shared/{question_id}/`.
+async def blawx_question_detail(question_id: int) -> dict[str, Any]:
+    """Get question by id obtained from blawx_questions_list tool.
     """
     settings = get_settings()
     team_id = await _resolve_team_id(
@@ -248,12 +232,10 @@ async def blawx_shared_question_detail(question_id: int) -> dict[str, Any]:
 
 @mcp.tool()
 async def blawx_question_ask_with_fact_scenario(
-    question_id: int, fact_scenario_id: int = 32
+    question_id: int, fact_scenario_id: int
 ) -> dict[str, Any]:
-    """Ask a question using a stored fact scenario (fact pattern).
-
-    Calls `POST /a/{team_slug}/project/{proj}/questions/{question}/ask/qfa/` with JSON body
-    `{"facts": <fact_scenario_id>}`.
+    """Ask a question (using id from blawx_questions_list) using a stored
+    fact scenario (using id from blawx_fact_scenarios_list).
     """
     settings = get_settings()
     url = (
@@ -268,12 +250,55 @@ async def blawx_question_ask_with_fact_scenario(
 
 @mcp.tool()
 async def blawx_question_ask_with_facts(question_id: int, facts: AskFactsPayload) -> dict[str, Any]:
-    """Ask a question using a structured facts payload.
+    """Ask a question (using id from blawx_questions_list)
+    using a structured facts payload.
 
-    Calls `POST /a/{team_slug}/project/{proj}/questions/{question}/ask/`.
+    The target server is an answer set programming reasoner, so the facts
+    have the meanings they would be afforded in answer set programming.
 
-    The request body is a top-level JSON array of facts; the `facts` parameter is validated
-    against the Pydantic schema in `blawx_mcp.schemas`.
+    Facts have a type that corresponds to answer set programming truth values:
+        "true" - the fact is known to be true
+        "false" - the fact is known to be false
+        "unknown" - the server should consider the possibility of both truth and falsehood
+    
+    Be careful to encode only facts that you are generating, do not encode facts that have been
+    obtained from previous calls to the reasoner.
+
+    The server will accept ungrounded facts, using variables with names. These variables
+    have the meaning that they would be given in logic programming. Two variables with the same name
+    refer to the same entity. Variables with different names may refer to different entities, or
+    the same entity. However, each fact is scoped individually, so variables used across multiple facts
+    have no relationship to one another.
+    
+    It is seldom useful to say that something is true about everything, or false
+    about everything, so be reluctant to use variables in true or false statements unless you
+    are sure that is the intent.
+
+    Unknown statements are used to facilitate abducible reasoning by creating an even loop over negation,
+    an unknown statement is converted into two rules, if there is no evidence the thing is true, it is false,
+    and if there is no evidence it is false, it is true, and the server explores both possibilities.
+
+    Using a large number of unknown statements may cause the reasoner to time out.
+
+    Format values according to these rules:
+
+    1. OBJECTS (for non-datatype categories):
+        - Must be declared in category facts before being used in relationships
+        - Object names must be lowercase strings without spaces (e.g., "john_doe", "contract_123", "department_of_defence")
+        - Convert user's natural language to valid atoms by replacing spaces with underscores
+        - Use only lowercase letters, numbers, and underscores
+        - Do not end a symbol with an underscore followed by numbers, as that is a reserved format.
+
+    2. DATATYPE VALUES (for Number, Date, Datetime, Time, Duration categories):
+        - Do NOT declare these in category facts
+        - Do NOT convert to atoms
+        - Use the values directly in relationships as shown below:
+    
+        Numbers: Plain integers or decimals (e.g., 10000, 3750000.50, 200000)
+        Dates: ISO 8601 format YYYY-MM-DD (e.g., "2025-01-15", "2024-12-31")
+        Times: HH:MM format (e.g., "14:30", "09:00")
+        Datetimes: ISO 8601 format YYYY-MM-DDTHH:MM (e.g., "2025-01-15T14:30", "2024-12-31T23:59")
+        Durations: ISO 8601 duration format (e.g., "P3D" for 3 days, "PT5H" for 5 hours, "P1DT2H30M" for 1 day, 2 hours, 30 minutes)
     """
     settings = get_settings()
     url = (
@@ -282,7 +307,8 @@ async def blawx_question_ask_with_facts(question_id: int, facts: AskFactsPayload
     )
 
     # The underlying endpoint expects the raw list payload, not a wrapper object.
-    payload = facts.root
+    # `facts.root` contains Pydantic models; dump them to plain JSON-serializable dicts.
+    payload = [fact.model_dump(exclude_none=True) for fact in facts.root]
     return await _request_json(
         method="POST",
         url=url,
