@@ -16,10 +16,12 @@ python -m pip install -e .
 
 ## Configuration
 
-Set an API key in your environment:
+Set required configuration in your environment:
 
 ```bash
 export BLAWX_API_KEY="your_key_here"
+export BLAWX_TEAM_SLUG="your_team_slug"
+export BLAWX_PROJECT_ID="42"
 ```
 
 Optional override:
@@ -49,4 +51,9 @@ export BLAWX_MCP_PORT="8765"
 ## Tools
 
 - `blawx_health`: calls `GET /health` on the Blawx app API and returns status + body.
-- `blawx_lexpedite_project6_question7_ask`: calls `POST /a/lexpedite/project/42/questions/59/ask/qfa/` with JSON body `{"facts": <facts>}` (defaults to `32`).
+- `blawx_ontology_list`: calls `GET /api/teams/{team_id}/projects/{project_id}/ontology/`.
+- `blawx_ontology_category_detail`: calls `GET /api/teams/{team_id}/projects/{project_id}/ontology/categories/{category_id}/`.
+- `blawx_ontology_relationship_detail`: calls `GET /api/teams/{team_id}/projects/{project_id}/ontology/relationships/{relationship_id}/`.
+- `blawx_shared_questions_list`: calls `GET /api/teams/{team_id}/projects/{project_id}/questions/shared/`.
+- `blawx_shared_question_detail`: calls `GET /api/teams/{team_id}/projects/{project_id}/questions/shared/{question_id}/`.
+- `blawx_shared_question_ask`: calls `POST /a/{team_slug}/project/{proj}/questions/{question}/ask/qfa/` with JSON body `{"facts": <facts>}` (defaults to `32`).

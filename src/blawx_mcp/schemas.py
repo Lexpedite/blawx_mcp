@@ -1,0 +1,109 @@
+"""Pydantic models for Reasoner "facts" payload shapes.
+
+The Blawx ask endpoints ultimately pass the request JSON payload into
+`apps.reasoner.views.json_2_scasp(payload, project=...)`.
+
+That function expects the request body to be a *top-level JSON array* (facts list):
+
+    [
+      {"type": "true", "category": "person", "object": "jason"},
+      {"type": "false", "relationship": "friend", "parameter1": "jason", "parameter2": {"variable": "one"}}
+    ]
+
+These models are used to:
+- validate payloads client-side, and
+- generate a JSON Schema (via Pydantic v2) that can be surfaced as an MCP tool input spec.
+"""
+
+from __future__ import annotations
+
+import json
+from typing import List, Optional, Union
+from typing_extensions import Literal
+
+from pydantic import BaseModel, ConfigDict, Field, RootModel
+
+
+class VariableRef(BaseModel):
+    """Represents a variable in the ask payload.
+
+    Example: {"variable": "one"}
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    variable: str = Field(..., description="Variable name (will be uppercased by the server).")
+
+
+AskValue = Union[str, int, float, VariableRef]
+
+
+class CategoryFact(BaseModel):
+    """A fact asserting membership in a category.
+
+    Example:
+      {"type": "true", "category": "person", "object": "jason"}
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["true", "false", "unknown"] = Field(..., description="One of: true | false | unknown")
+    category: str = Field(..., description="Category slug")
+    object: AskValue = Field(..., description="Object atom or variable")
+
+
+class RelationshipFact(BaseModel):
+    """A fact asserting a relationship holds (or does not hold / is unknown).
+
+    Example:
+      {"type": "true", "relationship": "likes", "parameter1": "jason", "parameter2": {"variable": "x"}}
+
+    Notes:
+    - The server enforces the required arity based on the Relationship definition in the DB.
+    - Extra parameterN keys beyond that arity will cause an error if populated.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["true", "false", "unknown"] = Field(..., description="One of: true | false | unknown")
+    relationship: str = Field(..., description="Relationship slug")
+
+    # The runtime allows up to 10 parameters.
+    parameter1: Optional[AskValue] = None
+    parameter2: Optional[AskValue] = None
+    parameter3: Optional[AskValue] = None
+    parameter4: Optional[AskValue] = None
+    parameter5: Optional[AskValue] = None
+    parameter6: Optional[AskValue] = None
+    parameter7: Optional[AskValue] = None
+    parameter8: Optional[AskValue] = None
+    parameter9: Optional[AskValue] = None
+    parameter10: Optional[AskValue] = None
+
+
+AskFact = Union[CategoryFact, RelationshipFact]
+
+
+class AskFactsPayload(RootModel[List[AskFact]]):
+    """Root model for the ask endpoint request body.
+
+    The ask endpoint expects the request body to be a top-level JSON array.
+
+    Example (as JSON):
+      [
+        {"type": "true", "category": "person", "object": "jason"},
+        {"type": "unknown", "relationship": "nice", "parameter1": "jason"}
+      ]
+    """
+
+
+def ask_facts_payload_json_schema_dict() -> dict:
+    """Return a JSON Schema dict for the ask endpoint request body (top-level list)."""
+
+    return AskFactsPayload.model_json_schema()
+
+
+def ask_facts_payload_json_schema() -> str:
+    """Return a JSON Schema string for the ask endpoint request body (top-level list)."""
+
+    return json.dumps(ask_facts_payload_json_schema_dict(), indent=2, sort_keys=True)
