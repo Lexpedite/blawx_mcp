@@ -257,7 +257,7 @@ async def blawx_question_ask_with_fact_scenario(
         api_key=settings.api_key,
         params={"output_styles": ["human"]},
         json_body=payload,
-        timeout_seconds=60.0,
+        timeout_seconds=120.0,
     )
 
 
@@ -328,7 +328,7 @@ async def blawx_question_ask_with_facts(question_id: int, facts: AskFactsPayload
         api_key=settings.api_key,
         params={"output_styles": ["human"]},
         json_body=payload,
-        timeout_seconds=60.0,
+        timeout_seconds=120.0,
     )
 
 
