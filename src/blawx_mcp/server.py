@@ -66,16 +66,24 @@ async def _request_json(
     url: str,
     api_key: str,
     json_body: Any | None = None,
+    params: dict[str, Any] | list[tuple[str, Any]] | None = None,
     timeout_seconds: float = 30.0,
 ) -> dict[str, Any]:
     headers = _auth_headers(api_key)
     timeout = httpx.Timeout(timeout_seconds)
     async with httpx.AsyncClient(timeout=timeout) as client:
-        resp = await client.request(method, url, headers=headers, json=json_body)
+        resp = await client.request(
+            method,
+            url,
+            headers=headers,
+            params=params,
+            json=json_body,
+        )
 
     body = await _get_json_or_text(resp)
     return {
         "url": url,
+        "params": params,
         "request": json_body,
         "request_headers": {
             "authorization": "Api-Key <redacted>",
@@ -244,7 +252,12 @@ async def blawx_question_ask_with_fact_scenario(
     )
     payload = {"facts": fact_scenario_id}
     return await _request_json(
-        method="POST", url=url, api_key=settings.api_key, json_body=payload, timeout_seconds=60.0
+        method="POST",
+        url=url,
+        api_key=settings.api_key,
+        params={"output_styles": ["human"]},
+        json_body=payload,
+        timeout_seconds=60.0,
     )
 
 
@@ -313,6 +326,7 @@ async def blawx_question_ask_with_facts(question_id: int, facts: AskFactsPayload
         method="POST",
         url=url,
         api_key=settings.api_key,
+        params={"output_styles": ["human"]},
         json_body=payload,
         timeout_seconds=60.0,
     )
