@@ -43,6 +43,109 @@ mcp = FastMCP(
 )
 
 
+async def _request_body(
+    *,
+    method: str,
+    url: str,
+    api_key: str,
+    json_body: Any | None = None,
+    params: dict[str, Any] | list[tuple[str, Any]] | None = None,
+    timeout_seconds: float = 30.0,
+) -> dict[str, Any]:
+    """HTTP helper for tools that should not expose request details.
+
+    Returns only status information and parsed body.
+    """
+
+    headers = _auth_headers(api_key)
+    timeout = httpx.Timeout(timeout_seconds)
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        resp = await client.request(
+            method,
+            url,
+            headers=headers,
+            params=params,
+            json=json_body,
+        )
+
+    body = await _get_json_or_text(resp)
+    return {
+        "status_code": resp.status_code,
+        "ok": resp.is_success,
+        "body": body,
+    }
+
+
+def _validate_slice(start: int | None, end: int | None) -> None:
+    if start is not None and start < 1:
+        raise ValueError("start must be >= 1 when provided")
+    if end is not None and end < 1:
+        raise ValueError("end must be >= 1 when provided")
+    if start is not None and end is not None and end < start:
+        raise ValueError("end must be >= start when both are provided")
+
+
+def _extract_cache_key(body: Any) -> str:
+    if isinstance(body, dict):
+        for key in ("cache_key", "cacheKey", "cacheKeyString"):
+            value = body.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    raise RuntimeError("Response did not include a cache_key")
+
+
+def _extract_optional_int(body: Any, key: str) -> int | None:
+    if isinstance(body, dict):
+        value = body.get(key)
+        if isinstance(value, int):
+            return value
+    return None
+
+
+def _extract_optional_str(body: Any, key: str) -> str | None:
+    if isinstance(body, dict):
+        value = body.get(key)
+        if isinstance(value, str):
+            return value
+    return None
+
+
+def _extract_index_list(body: Any, *, preferred_keys: tuple[str, ...]) -> list[int] | None:
+    """Best-effort extraction of indices from unknown response shapes."""
+
+    if isinstance(body, list):
+        return list(range(len(body)))
+
+    if isinstance(body, dict):
+        for key in preferred_keys:
+            value = body.get(key)
+            if isinstance(value, list):
+                return list(range(len(value)))
+
+        # Common pagination style
+        results = body.get("results")
+        if isinstance(results, list):
+            return list(range(len(results)))
+
+        # Sometimes a count is provided without an explicit list
+        count = body.get("count")
+        if isinstance(count, int) and count >= 0:
+            return list(range(count))
+
+    return None
+
+
+_PART_INTERNAL_TO_PUBLIC: dict[str, str] = {
+    "HumanModel": "model",
+    "HumanAttributes": "attributes",
+    "HumanTree": "explanation",
+}
+
+
+def _public_part_name(internal: str) -> str:
+    return _PART_INTERNAL_TO_PUBLIC.get(internal, internal)
+
+
 async def _get_json_or_text(resp: httpx.Response) -> Any:
     content_type = resp.headers.get("content-type", "")
     if "application/json" in content_type.lower():
@@ -239,11 +342,16 @@ async def blawx_question_detail(question_id: int) -> dict[str, Any]:
 
 
 @mcp.tool()
-async def blawx_question_ask_with_fact_scenario(
-    question_id: int, fact_scenario_id: int
-) -> dict[str, Any]:
-    """Ask a question (using id from blawx_questions_list) using a stored
-    fact scenario (using id from blawx_fact_scenarios_list).
+async def blawx_question_ask_with_fact_scenario(question_id: int, fact_scenario_id: int) -> dict[str, Any]:
+    """Ask a question using a stored fact scenario.
+
+        Returns a cache key for later retrieval.
+
+        Notes:
+            - The returned results are temporary. When available, `ttl_seconds` indicates how long
+                the cached response is expected to remain available.
+            - If follow-up retrieval tools return `status_code` 410 (expired / not found), re-run
+                this tool (or `blawx_question_ask_with_facts`) to obtain a fresh cache key.
     """
     settings = get_settings()
     url = (
@@ -251,20 +359,38 @@ async def blawx_question_ask_with_fact_scenario(
         f"/questions/{question_id}/ask/qfa/"
     )
     payload = {"facts": fact_scenario_id}
-    return await _request_json(
+    resp = await _request_body(
         method="POST",
         url=url,
         api_key=settings.api_key,
-        params={"output_styles": ["human"]},
+        params={"output_styles": ["human"], "cached": True},
         json_body=payload,
         timeout_seconds=120.0,
     )
 
+    body = resp.get("body")
+    cache_key = _extract_cache_key(body)
+    return {
+        "ok": resp["ok"],
+        "status_code": resp["status_code"],
+        "cache_key": cache_key,
+        "ttl_seconds": _extract_optional_int(body, "ttl_seconds"),
+        "created_at": _extract_optional_str(body, "created_at"),
+        "answer_count": _extract_optional_int(body, "answer_count"),
+    }
+
 
 @mcp.tool()
 async def blawx_question_ask_with_facts(question_id: int, facts: AskFactsPayload) -> dict[str, Any]:
-    """Ask a question (using id from blawx_questions_list)
-    using a structured facts payload.
+    """Ask a question using a structured facts payload.
+
+        Returns a cache key for later retrieval.
+
+        Notes:
+            - The returned results are temporary. When available, `ttl_seconds` indicates how long
+                the cached response is expected to remain available.
+            - If follow-up retrieval tools return `status_code` 410 (expired / not found), re-run
+                this tool (or `blawx_question_ask_with_fact_scenario`) to obtain a fresh cache key.
 
     The target server is an answer set programming reasoner, so the facts
     have the meanings they would be afforded in answer set programming.
@@ -322,13 +448,311 @@ async def blawx_question_ask_with_facts(question_id: int, facts: AskFactsPayload
     # The underlying endpoint expects the raw list payload, not a wrapper object.
     # `facts.root` contains Pydantic models; dump them to plain JSON-serializable dicts.
     payload = [fact.model_dump(exclude_none=True) for fact in facts.root]
-    return await _request_json(
+    resp = await _request_body(
         method="POST",
         url=url,
         api_key=settings.api_key,
-        params={"output_styles": ["human"]},
+        params={"output_styles": ["human"], "cached": True},
         json_body=payload,
         timeout_seconds=120.0,
+    )
+
+    body = resp.get("body")
+    cache_key = _extract_cache_key(body)
+    return {
+        "ok": resp["ok"],
+        "status_code": resp["status_code"],
+        "cache_key": cache_key,
+        "ttl_seconds": _extract_optional_int(body, "ttl_seconds"),
+        "created_at": _extract_optional_str(body, "created_at"),
+        "answer_count": _extract_optional_int(body, "answer_count"),
+    }
+
+
+@mcp.tool()
+async def blawx_list_answers(question_id: int, cache_key: str) -> dict[str, Any]:
+    """List answers for a previously asked question.
+
+        Returns:
+            - total: total number of answers
+            - answers: list of {answer_index, bindings, explanation_count}
+
+        If `status_code` is 410, the cache key has expired and you must re-run an ask tool.
+    """
+
+    settings = get_settings()
+    url = (
+        f"{settings.base_url}/a/{settings.team_slug}/project/{settings.project_id}"
+        f"/questions/{question_id}/responses/{cache_key}/answers/"
+    )
+    resp = await _request_body(
+        method="GET",
+        url=url,
+        api_key=settings.api_key,
+        timeout_seconds=60.0,
+    )
+
+    body = resp.get("body")
+    if isinstance(body, dict) and isinstance(body.get("answers"), list):
+        answers_out: list[dict[str, Any]] = []
+        for item in body.get("answers") or []:
+            if not isinstance(item, dict):
+                continue
+            answer_index = item.get("answer_index")
+            bindings = item.get("bindings")
+            explanation_count = item.get("explanation_count")
+            if isinstance(answer_index, int) and isinstance(bindings, str) and isinstance(explanation_count, int):
+                answers_out.append(
+                    {
+                        "answer_index": answer_index,
+                        "bindings": bindings,
+                        "explanation_count": explanation_count,
+                    }
+                )
+
+        total = body.get("total")
+        total_int = total if isinstance(total, int) else len(answers_out)
+        return {
+            "ok": resp["ok"],
+            "status_code": resp["status_code"],
+            "total": total_int,
+            "answers": answers_out,
+        }
+
+    # Fallback for unexpected shapes.
+    indices = _extract_index_list(body, preferred_keys=("answers", "Answers"))
+    answer_indices = indices or []
+    return {
+        "ok": resp["ok"],
+        "status_code": resp["status_code"],
+        "total": len(answer_indices),
+        "answers": [{"answer_index": i, "bindings": "", "explanation_count": 0} for i in answer_indices],
+        "note": "Unexpected response shape; returned inferred indices only",
+    }
+
+
+@mcp.tool()
+async def blawx_list_explanations(question_id: int, cache_key: str, answer_index: int) -> dict[str, Any]:
+    """List explanations available for a specific answer.
+
+        Returns:
+            - answer_index
+            - bindings
+            - explanations: list of {explanation_index, parts_available}
+
+        Important:
+            - The explanation text can include variables whose meaning depends on constraints.
+                Always retrieve the attributes part for the same explanation when interpreting the
+                explanation part; otherwise conclusions may be incorrect.
+
+        If `status_code` is 410, the cache key has expired and you must re-run an ask tool.
+    """
+
+    settings = get_settings()
+    url = (
+        f"{settings.base_url}/a/{settings.team_slug}/project/{settings.project_id}"
+        f"/questions/{question_id}/responses/{cache_key}/answers/{answer_index}/"
+    )
+    resp = await _request_body(
+        method="GET",
+        url=url,
+        api_key=settings.api_key,
+        timeout_seconds=60.0,
+    )
+
+    body = resp.get("body")
+    if isinstance(body, dict) and isinstance(body.get("explanations"), list):
+        out_explanations: list[dict[str, Any]] = []
+        for item in body.get("explanations") or []:
+            if not isinstance(item, dict):
+                continue
+            explanation_index_val = item.get("explanation_index")
+            if not isinstance(explanation_index_val, int):
+                continue
+
+            parts_obj = item.get("parts")
+            parts_available: list[str] = []
+            if isinstance(parts_obj, dict):
+                for internal_name, public_name in _PART_INTERNAL_TO_PUBLIC.items():
+                    if internal_name in parts_obj:
+                        parts_available.append(public_name)
+
+            out_explanations.append(
+                {
+                    "explanation_index": explanation_index_val,
+                    "parts_available": parts_available,
+                }
+            )
+
+        bindings = body.get("bindings") if isinstance(body.get("bindings"), str) else ""
+        return {
+            "ok": resp["ok"],
+            "status_code": resp["status_code"],
+            "answer_index": answer_index,
+            "bindings": bindings,
+            "explanations": out_explanations,
+        }
+
+    # Fallback for unexpected shapes.
+    indices = _extract_index_list(
+        body,
+        preferred_keys=("explanations", "Explanations", "explanation", "Explanation"),
+    )
+    explanation_indices = indices or []
+    return {
+        "ok": resp["ok"],
+        "status_code": resp["status_code"],
+        "answer_index": answer_index,
+        "bindings": "",
+        "explanations": [{"explanation_index": i, "parts_available": []} for i in explanation_indices],
+        "note": "Unexpected response shape; returned inferred indices only",
+    }
+
+
+async def _get_part(
+    *,
+    question_id: int,
+    cache_key: str,
+    answer_index: int,
+    explanation_index: int,
+    part_name: str,
+    start: int | None,
+    end: int | None,
+) -> dict[str, Any]:
+    settings = get_settings()
+    _validate_slice(start, end)
+    params: dict[str, Any] = {}
+    if start is not None:
+        params["start"] = start
+    if end is not None:
+        params["end"] = end
+
+    url = (
+        f"{settings.base_url}/a/{settings.team_slug}/project/{settings.project_id}"
+        f"/questions/{question_id}/responses/{cache_key}/answers/{answer_index}"
+        f"/explanations/{explanation_index}/{part_name}/"
+    )
+    resp = await _request_body(
+        method="GET",
+        url=url,
+        api_key=settings.api_key,
+        params=params if params else None,
+        timeout_seconds=60.0,
+    )
+    body = resp.get("body")
+    if isinstance(body, dict):
+        # Matches CachedResponseExplanationPart.
+        return {
+            "ok": resp["ok"],
+            "status_code": resp["status_code"],
+            "part": _public_part_name(str(body.get("part", part_name))),
+            "type": body.get("type"),
+            "start": body.get("start"),
+            "end": body.get("end"),
+            "total": body.get("total"),
+            "data": body.get("data"),
+        }
+
+    # Fallback for non-JSON or unexpected responses.
+    return {
+        "ok": resp["ok"],
+        "status_code": resp["status_code"],
+        "part": _public_part_name(part_name),
+        "type": None,
+        "start": start,
+        "end": end,
+        "total": None,
+        "data": body,
+        "note": "Unexpected response shape; returned body as data",
+    }
+
+
+@mcp.tool()
+async def blawx_get_model_part(
+    question_id: int,
+    cache_key: str,
+    answer_index: int,
+    explanation_index: int,
+    start: int | None = None,
+    end: int | None = None,
+) -> dict[str, Any]:
+    """Get the model portion of an explanation.
+
+    Uses optional 1-based inclusive line slicing via start/end.
+    Returns an object with fields: part, type, start, end, total, data.
+
+    If `status_code` is 410, the cache key has expired and you must re-run an ask tool.
+    """
+
+    return await _get_part(
+        question_id=question_id,
+        cache_key=cache_key,
+        answer_index=answer_index,
+        explanation_index=explanation_index,
+        part_name="HumanModel",
+        start=start,
+        end=end,
+    )
+
+
+@mcp.tool()
+async def blawx_get_attributes_part(
+    question_id: int,
+    cache_key: str,
+    answer_index: int,
+    explanation_index: int,
+    start: int | None = None,
+    end: int | None = None,
+) -> dict[str, Any]:
+    """Get the attributes portion of an explanation.
+
+    Uses optional 1-based inclusive line slicing via start/end.
+    Returns an object with fields: part, type, start, end, total, data.
+
+    If `status_code` is 410, the cache key has expired and you must re-run an ask tool.
+    """
+
+    return await _get_part(
+        question_id=question_id,
+        cache_key=cache_key,
+        answer_index=answer_index,
+        explanation_index=explanation_index,
+        part_name="HumanAttributes",
+        start=start,
+        end=end,
+    )
+
+
+@mcp.tool()
+async def blawx_get_explanation_part(
+    question_id: int,
+    cache_key: str,
+    answer_index: int,
+    explanation_index: int,
+    start: int | None = None,
+    end: int | None = None,
+) -> dict[str, Any]:
+    """Get the explanation portion of an explanation.
+
+    Uses optional 1-based inclusive line slicing via start/end.
+    Returns an object with fields: part, type, start, end, total, data.
+
+        Important:
+            - Always review the attributes part for the same explanation. The explanation text can
+                include variables whose meaning depends on attribute constraints (or lack of constraints).
+                Reading the explanation without attributes can lead to incorrect interpretation.
+
+    If `status_code` is 410, the cache key has expired and you must re-run an ask tool.
+    """
+
+    return await _get_part(
+        question_id=question_id,
+        cache_key=cache_key,
+        answer_index=answer_index,
+        explanation_index=explanation_index,
+        part_name="HumanTree",
+        start=start,
+        end=end,
     )
 
 
@@ -348,8 +772,10 @@ def main() -> None:
     logger.info(
         "Loaded tools: blawx_health, blawx_ontology_list, blawx_ontology_category_detail, "
         "blawx_ontology_relationship_detail, blawx_fact_scenarios_list, blawx_fact_scenario_detail, "
-        "blawx_shared_questions_list, blawx_shared_question_detail, "
-        "blawx_question_ask_with_fact_scenario, blawx_question_ask_with_facts"
+        "blawx_questions_list, blawx_question_detail, "
+        "blawx_question_ask_with_fact_scenario, blawx_question_ask_with_facts, "
+        "blawx_list_answers, blawx_list_explanations, "
+        "blawx_get_model_part, blawx_get_attributes_part, blawx_get_explanation_part"
     )
     logger.info(
         "Config via env: BLAWX_BASE_URL (default https://app.blawx.dev), BLAWX_API_KEY, BLAWX_TEAM_SLUG, BLAWX_PROJECT_ID"
