@@ -75,7 +75,7 @@ Cached responses can expire. If retrieval tools return `status_code` 410, re-run
 - `blawx_list_explanations`: calls `GET /a/{team_slug}/project/{proj}/questions/{question}/responses/{cache_key}/answers/{answer_index}/` and returns:
 	- `answer_index` (int)
 	- `bindings` (str)
-	- `explanations` (list): `{ explanation_index: int, parts_available: ["model"|"attributes"|"explanation"] }`
+	- `explanations` (list): `{ explanation_index: int, parts_available: ["model"|"attributes"|"explanation"|"constraint_satisfaction"] }`
 
 Part retrieval tools call `GET /a/{team_slug}/project/{proj}/questions/{question}/responses/{cache_key}/answers/{answer_index}/explanations/{explanation_index}/{part_name}/`.
 They support optional `start` / `end` query params that are 1-based and inclusive (line slicing):
@@ -83,10 +83,12 @@ They support optional `start` / `end` query params that are 1-based and inclusiv
 - `blawx_get_model_part`
 - `blawx_get_attributes_part`
 - `blawx_get_explanation_part`
+- `blawx_get_constraint_satisfaction_part` (often verbose; usually not required)
 
 Each returns an object shaped like:
 
 - `part`: one of `model` | `attributes` | `explanation`
+- `part`: may also be `constraint_satisfaction` when using `blawx_get_constraint_satisfaction_part`
 - `type`: optional string (nullable)
 - `start`, `end`, `total`: optional integers (nullable)
 - `data`: string (the newline-joined text for that part)

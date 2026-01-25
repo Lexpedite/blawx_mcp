@@ -139,6 +139,7 @@ _PART_INTERNAL_TO_PUBLIC: dict[str, str] = {
     "HumanModel": "model",
     "HumanAttributes": "attributes",
     "HumanTree": "explanation",
+    "constraint_satisfaction": "constraint_satisfaction",
 }
 
 
@@ -756,6 +757,38 @@ async def blawx_get_explanation_part(
     )
 
 
+@mcp.tool()
+async def blawx_get_constraint_satisfaction_part(
+    question_id: int,
+    cache_key: str,
+    answer_index: int,
+    explanation_index: int,
+    start: int | None = None,
+    end: int | None = None,
+) -> dict[str, Any]:
+    """Get the constraint satisfaction details for an explanation.
+
+    This data can be verbose and is frequently not required to understand the overall response.
+    Prefer using the model/attributes/explanation parts first, and only retrieve this part when
+    you specifically need to inspect how constraints were satisfied.
+
+    Uses optional 1-based inclusive line slicing via start/end.
+    Returns an object with fields: part, type, start, end, total, data.
+
+    If `status_code` is 410, the cache key has expired and you must re-run an ask tool.
+    """
+
+    return await _get_part(
+        question_id=question_id,
+        cache_key=cache_key,
+        answer_index=answer_index,
+        explanation_index=explanation_index,
+        part_name="constraint_satisfaction",
+        start=start,
+        end=end,
+    )
+
+
 def main() -> None:
     # SSE transport runs an HTTP server (uvicorn). We log a small banner so it's
     # obvious the server is up.
@@ -775,7 +808,8 @@ def main() -> None:
         "blawx_questions_list, blawx_question_detail, "
         "blawx_question_ask_with_fact_scenario, blawx_question_ask_with_facts, "
         "blawx_list_answers, blawx_list_explanations, "
-        "blawx_get_model_part, blawx_get_attributes_part, blawx_get_explanation_part"
+        "blawx_get_model_part, blawx_get_attributes_part, blawx_get_explanation_part, "
+        "blawx_get_constraint_satisfaction_part"
     )
     logger.info(
         "Config via env: BLAWX_BASE_URL (default https://app.blawx.dev), BLAWX_API_KEY, BLAWX_TEAM_SLUG, BLAWX_PROJECT_ID"
