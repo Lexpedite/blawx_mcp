@@ -1,6 +1,6 @@
 # blawx-mcp
 
-A minimal run-local MCP server (SSE over HTTP) that calls the Blawx app API using an API key from the environment.
+A minimal run-local MCP server (SSE over HTTP) that calls the Blawx API using a Blawx API key.
 
 ## Prereqs
 
@@ -24,9 +24,16 @@ export BLAWX_TEAM_SLUG="your_team_slug"
 export BLAWX_PROJECT_ID="42"
 ```
 
-Optional override:
+You will find the Blawx Project ID and team slug in the URL of your
+web browser when you go to the home page for your project. The
+pattern will be
+`https://app.blawx.dev/a/{team_slug}/project/{project_id}`
 
-- `BLAWX_BASE_URL` (default: `https://app.blawx.dev`)
+You can create a Blawx API Key if you have a Pro subscription to Blawx.
+Click on "Profile" in the left navigation bar, and find the "Add API 
+Key" button. When you click the button your API key will be displayed
+only once at the top of the screen. Copy and paste it into your
+environment settings.
 
 ## Run
 
@@ -48,49 +55,108 @@ export BLAWX_MCP_HOST="127.0.0.1"
 export BLAWX_MCP_PORT="8765"
 ```
 
+## Connect to Your Coding Agent
+
+Coding agents differ in how they configure MCP servers. This is a typical
+tool definition in your `mcp.json` for VS Code.
+
+```
+{
+	"servers": {
+		"my-blawx-sse-server": {
+			"url": "http://127.0.0.1:8765/sse",
+			"type": "http"
+		}
+	},
+	"inputs": []
+}
+```
+
 ## Tools
 
-- `blawx_health`: calls `GET /health` on the Blawx app API and returns status + body.
-- `blawx_ontology_list`: calls `GET /api/teams/{team_id}/projects/{project_id}/ontology/`.
-- `blawx_ontology_category_detail`: calls `GET /api/teams/{team_id}/projects/{project_id}/ontology/categories/{category_id}/`.
-- `blawx_ontology_relationship_detail`: calls `GET /api/teams/{team_id}/projects/{project_id}/ontology/relationships/{relationship_id}/`.
-- `blawx_fact_scenarios_list`: calls `GET /api/teams/{team_id}/projects/{project_id}/facts/`.
-- `blawx_fact_scenario_detail`: calls `GET /api/teams/{team_id}/projects/{project_id}/facts/{fact_scenario_id}/`.
-- `blawx_questions_list`: calls `GET /api/teams/{team_id}/projects/{project_id}/questions/shared/`.
-- `blawx_question_detail`: calls `GET /api/teams/{team_id}/projects/{project_id}/questions/shared/{question_id}/`.
+These tools give your coding agent the following capabilities:
 
-Reasoner workflow (cache-key based):
+1. Discover what the project exposes (questions, fact scenarios, ontology).
+2. Ask a question (using either a stored fact scenario or a custom facts payload).
+3. Browse answers and drill into explanations (model/attributes/explanation text).
 
-- `blawx_question_ask_with_facts`: calls `POST /a/{team_slug}/project/{proj}/questions/{question}/ask/` and returns:
-	- `cache_key` (string)
-	- optional metadata when available: `ttl_seconds`, `created_at`, `answer_count`
-- `blawx_question_ask_with_fact_scenario`: calls `POST /a/{team_slug}/project/{proj}/questions/{question}/ask/qfa/` and returns the same shape.
+Here's a brief run-down of the available tools.
 
-Cached responses can expire. If retrieval tools return `status_code` 410, re-run an ask tool to obtain a fresh `cache_key`.
+### Health check
 
-- `blawx_list_answers`: calls `GET /a/{team_slug}/project/{proj}/questions/{question}/responses/{cache_key}/answers/` and returns:
-	- `total` (int)
-	- `answers` (list of objects): `{ answer_index: int, bindings: str, explanation_count: int }`
+- `blawx_health`: verifies the Blawx app is reachable and returns status/body.
 
-- `blawx_list_explanations`: calls `GET /a/{team_slug}/project/{proj}/questions/{question}/responses/{cache_key}/answers/{answer_index}/` and returns:
-	- `answer_index` (int)
-	- `bindings` (str)
-	- `explanations` (list): `{ explanation_index: int, parts_available: ["model"|"attributes"|"explanation"|"constraint_satisfaction"] }`
+### Discover Project Content
 
-Part retrieval tools call `GET /a/{team_slug}/project/{proj}/questions/{question}/responses/{cache_key}/answers/{answer_index}/explanations/{explanation_index}/{part_name}/`.
-They support optional `start` / `end` query params that are 1-based and inclusive (line slicing):
+Agents will usually start by listing the available questions,
+fact scenarios, and vocabulary.
 
-- `blawx_get_model_part`
-- `blawx_get_attributes_part`
-- `blawx_get_explanation_part`
-- `blawx_get_constraint_satisfaction_part` (often verbose; usually not required)
+- `blawx_questions_list`: lists shared questions available in the project.
+- `blawx_question_detail`: retrieves a specific question's details (useful when deciding which question id to ask).
+- `blawx_fact_scenarios_list`: lists stored fact scenarios (prebuilt sets of facts you can re-use).
+- `blawx_fact_scenario_detail`: shows the facts contained in a specific fact scenario.
+- `blawx_ontology_list`: lists ontology categories/relationships (the project's vocabulary).
+- `blawx_ontology_category_detail`: details for a specific category.
+- `blawx_ontology_relationship_detail`: details for a specific relationship (including arity/parameters).
 
-Each returns an object shaped like:
+### Ask Questions
 
-- `part`: one of `model` | `attributes` | `explanation`
-- `part`: may also be `constraint_satisfaction` when using `blawx_get_constraint_satisfaction_part`
-- `type`: optional string (nullable)
-- `start`, `end`, `total`: optional integers (nullable)
-- `data`: string (the newline-joined text for that part)
+- `blawx_question_ask_with_fact_scenario`: asks a question using a stored fact scenario.
+- `blawx_question_ask_with_facts`: asks a question using an explicit facts payload generated by your agent based on your
+instructions.
 
-Important: interpret the explanation alongside attributes. The explanation part may use variables whose meaning depends on constraints described in the attributes part; reading explanation without attributes can be misleading.
+**NB**: It's not clear how good agents will be at generating
+representations of complicated fact scenarios in complicated
+vocabularies. It can be helpful to review how your agent
+formulated your fact scenario if you get unexpected results,
+and to give it hints on how to do better.
+
+When you pose a question, the answer is saved on the Blawx
+server for approximately 30 minutes, and your agent can
+review it over that period of time. Once the data expires,
+your agent will need to pose the qestion again to analyse
+the responses further. Based on the instructions provided
+by the MCP server, it should know to do that when and if
+required.
+
+### Review Answers
+
+Blawx's answers can be quite large, and agents have a limited
+context window, so the process of reviewing
+answers is broken into multiple steps.
+
+1. Get the list of answers to the question.
+2. Get the list of explanations for a specific answer.
+3. Look at the parts of a specific explanation.
+
+- `blawx_list_answers`: gives the list of answers available,
+and the bindings in those answers.
+
+- `blawx_list_explanations`: gives the list of explanations available for an answer
+
+There are four tools to retrieve specific parts of an 
+explanation. These tools all allow the agent to select the
+entire part, or if it is too long, to select only certain
+lines at a time.
+
+- `blawx_get_model_part`: this returns the answer set 
+- `blawx_get_attributes_part`: this returns the constraints applied to variables in the model and explanations
+- `blawx_get_explanation_part`: this is the tree-structured,
+human-readable explanation for the answer
+- `blawx_get_constraint_satisfaction_part`: this is the portion
+of the explanation that shows how global constraints were satisfied. This is often both verbose and unhelpful, so it
+is separated out. You may need to ask your agent to seek it
+specifically if you know your encoding uses constraints and
+you need to know how they are satisfied.
+
+**NB**: The other three parts should be read alongisde the
+attributes, or relevant information may be missing. This
+instruction is provided to the agent, but if it isn't followed
+your agent may draw incorrect conclusions. It may be wise to
+instruct your agent to check the attributes in addition to
+the other parts of an explanation.
+
+## Development
+The Blawx server used can be overridden for local development
+
+- `BLAWX_BASE_URL` (default: `https://app.blawx.dev`)
