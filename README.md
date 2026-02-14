@@ -99,6 +99,8 @@ fact scenarios, and vocabulary.
 - `blawx_ontology_category_detail`: details for a specific category.
 - `blawx_ontology_relationship_detail`: details for a specific relationship (including arity/parameters).
 
+Additional read-write tools are also available for project editing (questions, fact scenarios, ontology categories/relationships/parameters).
+
 ### Ask Questions
 
 - `blawx_question_ask_with_fact_scenario`: asks a question using a stored fact scenario.
@@ -132,6 +134,8 @@ answers is broken into multiple steps.
 - `blawx_list_answers`: gives the list of answers available,
 and the bindings in those answers.
 
+- `blawx_cached_response_meta`: metadata (ttl, created, answer_count) for a cached response.
+
 - `blawx_list_explanations`: gives the list of explanations available for an answer
 
 There are four tools to retrieve specific parts of an 
@@ -148,6 +152,14 @@ of the explanation that shows how global constraints were satisfied. This is oft
 is separated out. You may need to ask your agent to seek it
 specifically if you know your encoding uses constraints and
 you need to know how they are satisfied.
+
+### Legal Docs + Encoding
+
+The API supports read-write legal documents and parts; for now this MCP server exposes read-only tools for legal docs/parts, and read-write tools for encoding parts.
+
+- `blawx_legaldocs_list`, `blawx_legaldoc_detail`
+- `blawx_legaldocparts_list`, `blawx_legaldocpart_detail`
+- `blawx_encodingpart_get`, `blawx_encodingpart_update`, `blawx_encodingpart_patch`, `blawx_encodingpart_delete`
 
 **NB**: The other three parts should be read alongisde the
 attributes, or relevant information may be missing. This

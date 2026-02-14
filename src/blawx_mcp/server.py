@@ -11,6 +11,12 @@ import httpx
 from mcp.server.fastmcp import FastMCP
 
 from .config import get_settings
+from .guides import (
+    BLAWX_JSON_GUIDE_MD,
+    ENCODINGPART_GUIDE_MD,
+    ONTOLOGY_GUIDE_MD,
+    SCA_SP_GUIDE_MD,
+)
 from .schemas import AskFactsPayload
 
 _TEAM_ID_CACHE: dict[str, int] = {}
@@ -41,6 +47,112 @@ mcp = FastMCP(
     port=_port,
     log_level=_log_level if _log_level else "INFO",
 )
+
+
+@mcp.resource(
+    "blawx://guides/scasp",
+    title="s(CASP) Encoding Guide",
+    description="Rules and workflow for generating s(CASP) encodings in Blawx.",
+    mime_type="text/markdown",
+)
+async def blawx_guide_scasp() -> str:
+    return SCA_SP_GUIDE_MD
+
+
+@mcp.resource(
+    "blawx://guides/ontology",
+    title="Ontology Guide",
+    description="How Blawx ontologies structure categories and relationships, and how encodings should use them.",
+    mime_type="text/markdown",
+)
+async def blawx_guide_ontology() -> str:
+    return ONTOLOGY_GUIDE_MD
+
+
+@mcp.resource(
+    "blawx://guides/blawx-json",
+    title="Blawx JSON Blocks Guide",
+    description="How to represent Blawx visual blocks in JSON (for LLM-generated encodings).",
+    mime_type="text/markdown",
+)
+async def blawx_guide_blawx_json() -> str:
+    return BLAWX_JSON_GUIDE_MD
+
+
+@mcp.resource(
+    "blawx://guides/encodingpart",
+    title="EncodingPart Workflow",
+    description="Typical agent workflow for fetching text/ontology/examples and writing EncodingParts.",
+    mime_type="text/markdown",
+)
+async def blawx_guide_encodingpart() -> str:
+    return ENCODINGPART_GUIDE_MD
+
+
+@mcp.prompt(
+    title="Suggest s(CASP) Encoding",
+    description="Generates a structured s(CASP) encoding suggestion based on ontology + examples + target text.",
+)
+def blawx_prompt_scasp_encoding(*, ontology: str, examples: str, target_text: str) -> list[dict[str, Any]]:
+    guide = (
+        "You are BlawxBot, a code generation assistant. You generate code in the s(CASP) language "
+        "representing the meaning of small segments of legislative or regulatory text.\n\n"
+        "Follow the s(CASP) constraints and workflow in the attached guide.\n\n"
+        "Return your work in these sections: (1) facts+implications, (2) ontology mapping+recommendations, "
+        "(3) pseudocode, (4) s(CASP) code.\n"
+    )
+    return [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": guide},
+                {
+                    "type": "resource",
+                    "resource": {"uri": "blawx://guides/scasp", "text": SCA_SP_GUIDE_MD},
+                },
+                {
+                    "type": "resource",
+                    "resource": {"uri": "blawx://guides/ontology", "text": ONTOLOGY_GUIDE_MD},
+                },
+                {"type": "text", "text": f"\nOntology:\n{ontology}\n"},
+                {"type": "text", "text": f"\nExamples:\n{examples}\n"},
+                {"type": "text", "text": f"\nTarget text (encode only the bracketed portion if present):\n{target_text}\n"},
+            ],
+        }
+    ]
+
+
+@mcp.prompt(
+    title="Suggest Blawx JSON Blocks Encoding",
+    description="Generates a structured Blawx JSON blocks encoding suggestion based on ontology + examples + target text.",
+)
+def blawx_prompt_blawx_json_encoding(*, ontology: str, examples: str, target_text: str) -> list[dict[str, Any]]:
+    guide = (
+        "You are BlawxBot, a code generation assistant. You generate Blawx visual-language encodings "
+        "serialized as JSON blocks.\n\n"
+        "Follow the Blawx JSON constraints and workflow in the attached guide.\n\n"
+        "Return your work in these sections: (1) facts+implications, (2) ontology phrasing/pseudocode, "
+        "(3) Blawx JSON (must be valid JSON, not a string).\n"
+    )
+    return [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": guide},
+                {
+                    "type": "resource",
+                    "resource": {"uri": "blawx://guides/blawx-json", "text": BLAWX_JSON_GUIDE_MD},
+                },
+                {
+                    "type": "resource",
+                    "resource": {"uri": "blawx://guides/ontology", "text": ONTOLOGY_GUIDE_MD},
+                },
+                {"type": "text", "text": f"\nOntology:\n{ontology}\n"},
+                {"type": "text", "text": f"\nExamples:\n{examples}\n"},
+                {"type": "text", "text": f"\nTarget text (encode only the bracketed portion if present):\n{target_text}\n"},
+            ],
+        }
+    ]
 
 
 async def _request_body(
@@ -271,6 +383,99 @@ async def blawx_ontology_list() -> dict[str, Any]:
 
 
 @mcp.tool()
+async def blawx_ontology_categories_list() -> dict[str, Any]:
+    """List ontology categories.
+
+    This endpoint is read-write in the API (create/update/delete are also supported).
+    """
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/ontology/categories/"
+    return await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+
+
+@mcp.tool()
+async def blawx_ontology_category_create(payload: dict[str, Any]) -> dict[str, Any]:
+    """Create a new ontology category.
+
+    The request schema depends on the server; pass the JSON body as a dict.
+    """
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/ontology/categories/"
+    return await _request_json(
+        method="POST",
+        url=url,
+        api_key=settings.api_key,
+        json_body=payload,
+        timeout_seconds=30.0,
+    )
+
+
+@mcp.tool()
+async def blawx_ontology_category_update(category_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+    """Replace an ontology category (PUT)."""
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = (
+        f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
+        f"/ontology/categories/{category_id}/"
+    )
+    return await _request_json(
+        method="PUT",
+        url=url,
+        api_key=settings.api_key,
+        json_body=payload,
+        timeout_seconds=30.0,
+    )
+
+
+@mcp.tool()
+async def blawx_ontology_category_patch(category_id: int, patch: dict[str, Any]) -> dict[str, Any]:
+    """Partially update an ontology category (PATCH)."""
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = (
+        f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
+        f"/ontology/categories/{category_id}/"
+    )
+    return await _request_json(
+        method="PATCH",
+        url=url,
+        api_key=settings.api_key,
+        json_body=patch,
+        timeout_seconds=30.0,
+    )
+
+
+@mcp.tool()
+async def blawx_ontology_category_delete(category_id: int) -> dict[str, Any]:
+    """Delete an ontology category."""
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = (
+        f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
+        f"/ontology/categories/{category_id}/"
+    )
+    return await _request_json(method="DELETE", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+
+
+@mcp.tool()
 async def blawx_ontology_category_detail(category_id: int) -> dict[str, Any]:
     """Get category details by id obtained from blawx_ontology_list tool.
     """
@@ -295,6 +500,205 @@ async def blawx_ontology_relationship_detail(relationship_id: int) -> dict[str, 
 
 
 @mcp.tool()
+async def blawx_ontology_relationships_list() -> dict[str, Any]:
+    """List ontology relationships."""
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/ontology/relationships/"
+    return await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+
+
+@mcp.tool()
+async def blawx_ontology_relationship_create(payload: dict[str, Any]) -> dict[str, Any]:
+    """Create a new ontology relationship."""
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/ontology/relationships/"
+    return await _request_json(
+        method="POST",
+        url=url,
+        api_key=settings.api_key,
+        json_body=payload,
+        timeout_seconds=30.0,
+    )
+
+
+@mcp.tool()
+async def blawx_ontology_relationship_update(relationship_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+    """Replace an ontology relationship (PUT)."""
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = (
+        f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
+        f"/ontology/relationships/{relationship_id}/"
+    )
+    return await _request_json(
+        method="PUT",
+        url=url,
+        api_key=settings.api_key,
+        json_body=payload,
+        timeout_seconds=30.0,
+    )
+
+
+@mcp.tool()
+async def blawx_ontology_relationship_patch(relationship_id: int, patch: dict[str, Any]) -> dict[str, Any]:
+    """Partially update an ontology relationship (PATCH)."""
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = (
+        f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
+        f"/ontology/relationships/{relationship_id}/"
+    )
+    return await _request_json(
+        method="PATCH",
+        url=url,
+        api_key=settings.api_key,
+        json_body=patch,
+        timeout_seconds=30.0,
+    )
+
+
+@mcp.tool()
+async def blawx_ontology_relationship_delete(relationship_id: int) -> dict[str, Any]:
+    """Delete an ontology relationship."""
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = (
+        f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
+        f"/ontology/relationships/{relationship_id}/"
+    )
+    return await _request_json(method="DELETE", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+
+
+@mcp.tool()
+async def blawx_ontology_relationship_parameters_list(relationship_id: int) -> dict[str, Any]:
+    """List parameters for a relationship."""
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = (
+        f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
+        f"/ontology/relationships/{relationship_id}/parameters/"
+    )
+    return await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+
+
+@mcp.tool()
+async def blawx_ontology_relationship_parameter_create(relationship_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+    """Create a new relationship parameter definition."""
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = (
+        f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
+        f"/ontology/relationships/{relationship_id}/parameters/"
+    )
+    return await _request_json(
+        method="POST",
+        url=url,
+        api_key=settings.api_key,
+        json_body=payload,
+        timeout_seconds=30.0,
+    )
+
+
+@mcp.tool()
+async def blawx_ontology_relationship_parameter_update(
+    relationship_id: int, parameter_id: int, payload: dict[str, Any]
+) -> dict[str, Any]:
+    """Replace a relationship parameter definition (PUT)."""
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = (
+        f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
+        f"/ontology/relationships/{relationship_id}/parameters/{parameter_id}/"
+    )
+    return await _request_json(
+        method="PUT",
+        url=url,
+        api_key=settings.api_key,
+        json_body=payload,
+        timeout_seconds=30.0,
+    )
+
+
+@mcp.tool()
+async def blawx_ontology_relationship_parameter_detail(relationship_id: int, parameter_id: int) -> dict[str, Any]:
+    """Get a relationship parameter definition by id."""
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = (
+        f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
+        f"/ontology/relationships/{relationship_id}/parameters/{parameter_id}/"
+    )
+    return await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+
+
+@mcp.tool()
+async def blawx_ontology_relationship_parameter_patch(
+    relationship_id: int, parameter_id: int, patch: dict[str, Any]
+) -> dict[str, Any]:
+    """Partially update a relationship parameter definition (PATCH)."""
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = (
+        f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
+        f"/ontology/relationships/{relationship_id}/parameters/{parameter_id}/"
+    )
+    return await _request_json(
+        method="PATCH",
+        url=url,
+        api_key=settings.api_key,
+        json_body=patch,
+        timeout_seconds=30.0,
+    )
+
+
+@mcp.tool()
+async def blawx_ontology_relationship_parameter_delete(relationship_id: int, parameter_id: int) -> dict[str, Any]:
+    """Delete a relationship parameter definition."""
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = (
+        f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
+        f"/ontology/relationships/{relationship_id}/parameters/{parameter_id}/"
+    )
+    return await _request_json(method="DELETE", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+
+
+@mcp.tool()
 async def blawx_fact_scenarios_list() -> dict[str, Any]:
     """List available fact scenarios for use in the blawx_ask_question_with_fact_scenario tool.
     """
@@ -304,6 +708,27 @@ async def blawx_fact_scenarios_list() -> dict[str, Any]:
     )
     url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/facts/"
     return await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+
+
+@mcp.tool()
+async def blawx_fact_scenario_create(payload: dict[str, Any]) -> dict[str, Any]:
+    """Create a new fact scenario.
+
+    The request schema depends on the server; pass the JSON body as a dict.
+    """
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/facts/"
+    return await _request_json(
+        method="POST",
+        url=url,
+        api_key=settings.api_key,
+        json_body=payload,
+        timeout_seconds=30.0,
+    )
 
 
 @mcp.tool()
@@ -319,14 +744,76 @@ async def blawx_fact_scenario_detail(fact_scenario_id: int) -> dict[str, Any]:
 
 
 @mcp.tool()
+async def blawx_fact_scenario_update(fact_scenario_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+    """Replace a fact scenario (PUT)."""
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/facts/{fact_scenario_id}/"
+    return await _request_json(
+        method="PUT",
+        url=url,
+        api_key=settings.api_key,
+        json_body=payload,
+        timeout_seconds=30.0,
+    )
+
+
+@mcp.tool()
+async def blawx_fact_scenario_patch(fact_scenario_id: int, patch: dict[str, Any]) -> dict[str, Any]:
+    """Partially update a fact scenario (PATCH)."""
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/facts/{fact_scenario_id}/"
+    return await _request_json(
+        method="PATCH",
+        url=url,
+        api_key=settings.api_key,
+        json_body=patch,
+        timeout_seconds=30.0,
+    )
+
+
+@mcp.tool()
+async def blawx_fact_scenario_delete(fact_scenario_id: int) -> dict[str, Any]:
+    """Delete a fact scenario."""
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/facts/{fact_scenario_id}/"
+    return await _request_json(method="DELETE", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+
+
+@mcp.tool()
 async def blawx_questions_list() -> dict[str, Any]:
-    """List available questions.
+    """List available shared questions (read-only).
+
+    For read-write question management, use blawx_questions_list_all and related tools.
     """
     settings = get_settings()
     team_id = await _resolve_team_id(
         base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
     )
     url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/questions/shared/"
+    return await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+
+
+@mcp.tool()
+async def blawx_questions_list_all() -> dict[str, Any]:
+    """List all questions in the project (read-write collection)."""
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/questions/"
     return await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=30.0)
 
 
@@ -340,6 +827,84 @@ async def blawx_question_detail(question_id: int) -> dict[str, Any]:
     )
     url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/questions/shared/{question_id}/"
     return await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+
+
+@mcp.tool()
+async def blawx_question_detail_all(question_id: int) -> dict[str, Any]:
+    """Get a question from the read-write questions endpoint by id."""
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/questions/{question_id}/"
+    return await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+
+
+@mcp.tool()
+async def blawx_question_create(payload: dict[str, Any]) -> dict[str, Any]:
+    """Create a new question in the project."""
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/questions/"
+    return await _request_json(
+        method="POST",
+        url=url,
+        api_key=settings.api_key,
+        json_body=payload,
+        timeout_seconds=30.0,
+    )
+
+
+@mcp.tool()
+async def blawx_question_update(question_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+    """Replace a question (PUT)."""
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/questions/{question_id}/"
+    return await _request_json(
+        method="PUT",
+        url=url,
+        api_key=settings.api_key,
+        json_body=payload,
+        timeout_seconds=30.0,
+    )
+
+
+@mcp.tool()
+async def blawx_question_patch(question_id: int, patch: dict[str, Any]) -> dict[str, Any]:
+    """Partially update a question (PATCH)."""
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/questions/{question_id}/"
+    return await _request_json(
+        method="PATCH",
+        url=url,
+        api_key=settings.api_key,
+        json_body=patch,
+        timeout_seconds=30.0,
+    )
+
+
+@mcp.tool()
+async def blawx_question_delete(question_id: int) -> dict[str, Any]:
+    """Delete a question."""
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/questions/{question_id}/"
+    return await _request_json(method="DELETE", url=url, api_key=settings.api_key, timeout_seconds=30.0)
 
 
 @mcp.tool()
@@ -533,6 +1098,21 @@ async def blawx_list_answers(question_id: int, cache_key: str) -> dict[str, Any]
 
 
 @mcp.tool()
+async def blawx_cached_response_meta(question_id: int, cache_key: str) -> dict[str, Any]:
+    """Retrieve cached-response metadata (ttl, created time, answer count when available).
+
+    If `status_code` is 410, the cache key has expired and you must re-run an ask tool.
+    """
+
+    settings = get_settings()
+    url = (
+        f"{settings.base_url}/a/{settings.team_slug}/project/{settings.project_id}"
+        f"/questions/{question_id}/responses/{cache_key}/"
+    )
+    return await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+
+
+@mcp.tool()
 async def blawx_list_explanations(question_id: int, cache_key: str, answer_index: int) -> dict[str, Any]:
     """List explanations available for a specific answer.
 
@@ -608,6 +1188,187 @@ async def blawx_list_explanations(question_id: int, cache_key: str, answer_index
         "explanations": [{"explanation_index": i, "parts_available": []} for i in explanation_indices],
         "note": "Unexpected response shape; returned inferred indices only",
     }
+
+
+@mcp.tool()
+async def blawx_get_explanation_full(
+    question_id: int,
+    cache_key: str,
+    answer_index: int,
+    explanation_index: int,
+) -> dict[str, Any]:
+    """Get the full explanation object (all parts, unsliced).
+
+    This can be large; prefer blawx_get_*_part tools when you only need one section.
+
+    If `status_code` is 410, the cache key has expired and you must re-run an ask tool.
+    """
+
+    settings = get_settings()
+    url = (
+        f"{settings.base_url}/a/{settings.team_slug}/project/{settings.project_id}"
+        f"/questions/{question_id}/responses/{cache_key}/answers/{answer_index}"
+        f"/explanations/{explanation_index}/"
+    )
+    return await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=60.0)
+
+
+@mcp.tool()
+async def blawx_legaldocs_list() -> dict[str, Any]:
+    """List legal docs in the project.
+
+    Note: This MCP server currently does not expose tools to create/update/delete legaldocs.
+    """
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/legaldocs/"
+    return await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+
+
+@mcp.tool()
+async def blawx_legaldoc_detail(legal_doc_id: int) -> dict[str, Any]:
+    """Get a legal doc by id.
+
+    Note: This MCP server currently does not expose tools to create/update/delete legaldocs.
+    """
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/legaldocs/{legal_doc_id}/"
+    return await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+
+
+@mcp.tool()
+async def blawx_legaldocparts_list(legal_doc_id: int) -> dict[str, Any]:
+    """List parts for a legal doc.
+
+    Note: This MCP server currently does not expose tools to create/update/delete legaldocparts.
+    """
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = (
+        f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
+        f"/legaldocs/{legal_doc_id}/parts/"
+    )
+    return await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+
+
+@mcp.tool()
+async def blawx_legaldocpart_detail(legal_doc_id: int, legal_doc_part_id: int) -> dict[str, Any]:
+    """Get a single legal doc part by id."""
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = (
+        f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
+        f"/legaldocs/{legal_doc_id}/parts/{legal_doc_part_id}/"
+    )
+    return await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+
+
+@mcp.tool()
+async def blawx_encodingpart_get(legal_doc_id: int, legal_doc_part_id: int) -> dict[str, Any]:
+    """Get the encoding for a specific legal doc part.
+
+    See guidance resources:
+    - blawx://guides/encodingpart
+    - blawx://guides/scasp
+    - blawx://guides/blawx-json
+    """
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = (
+        f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
+        f"/legaldocs/{legal_doc_id}/parts/{legal_doc_part_id}/encoding/"
+    )
+    return await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+
+
+@mcp.tool()
+async def blawx_encodingpart_update(
+    legal_doc_id: int, legal_doc_part_id: int, payload: dict[str, Any]
+) -> dict[str, Any]:
+    """Replace the encoding for a legal doc part (PUT).
+
+    This tool writes an EncodingPart. Ensure the payload matches what the Blawx server expects.
+    For language constraints and modeling workflow, see:
+    - blawx://guides/encodingpart
+    - blawx://guides/scasp
+    - blawx://guides/ontology
+    """
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = (
+        f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
+        f"/legaldocs/{legal_doc_id}/parts/{legal_doc_part_id}/encoding/"
+    )
+    return await _request_json(
+        method="PUT",
+        url=url,
+        api_key=settings.api_key,
+        json_body=payload,
+        timeout_seconds=60.0,
+    )
+
+
+@mcp.tool()
+async def blawx_encodingpart_patch(
+    legal_doc_id: int, legal_doc_part_id: int, patch: dict[str, Any]
+) -> dict[str, Any]:
+    """Partially update the encoding for a legal doc part (PATCH).
+
+    For language constraints and modeling workflow, see:
+    - blawx://guides/encodingpart
+    - blawx://guides/scasp
+    - blawx://guides/ontology
+    """
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = (
+        f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
+        f"/legaldocs/{legal_doc_id}/parts/{legal_doc_part_id}/encoding/"
+    )
+    return await _request_json(
+        method="PATCH",
+        url=url,
+        api_key=settings.api_key,
+        json_body=patch,
+        timeout_seconds=60.0,
+    )
+
+
+@mcp.tool()
+async def blawx_encodingpart_delete(legal_doc_id: int, legal_doc_part_id: int) -> dict[str, Any]:
+    """Delete the encoding for a legal doc part."""
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = (
+        f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
+        f"/legaldocs/{legal_doc_id}/parts/{legal_doc_part_id}/encoding/"
+    )
+    return await _request_json(method="DELETE", url=url, api_key=settings.api_key, timeout_seconds=60.0)
 
 
 async def _get_part(
@@ -803,13 +1564,8 @@ def main() -> None:
     logger.info("Starting blawx-mcp MCP server (SSE)")
     logger.info("Listening on http://%s:%s/sse", mcp.settings.host, mcp.settings.port)
     logger.info(
-        "Loaded tools: blawx_health, blawx_ontology_list, blawx_ontology_category_detail, "
-        "blawx_ontology_relationship_detail, blawx_fact_scenarios_list, blawx_fact_scenario_detail, "
-        "blawx_questions_list, blawx_question_detail, "
-        "blawx_question_ask_with_fact_scenario, blawx_question_ask_with_facts, "
-        "blawx_list_answers, blawx_list_explanations, "
-        "blawx_get_model_part, blawx_get_attributes_part, blawx_get_explanation_part, "
-        "blawx_get_constraint_satisfaction_part"
+        "Loaded tools: health, ontology (read + read-write CRUD), facts (read + CRUD), "
+        "questions (read shared + CRUD), ask/answers/explanations, legaldocs (read), encoding (read-write)"
     )
     logger.info(
         "Config via env: BLAWX_BASE_URL (default https://app.blawx.dev), BLAWX_API_KEY, BLAWX_TEAM_SLUG, BLAWX_PROJECT_ID"
