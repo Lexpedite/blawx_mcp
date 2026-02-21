@@ -12,10 +12,12 @@ from mcp.server.fastmcp import FastMCP
 
 from .config import get_settings
 from .guides import (
+    BLAWX_BLOCKS_GUIDE_MD,
     BLAWX_JSON_GUIDE_MD,
     ENCODINGPART_GUIDE_MD,
     ONTOLOGY_GUIDE_MD,
     SCA_SP_GUIDE_MD,
+    VALID_BLAWX_JSON_GUIDE_MD,
 )
 from .schemas import AskFactsPayload, EncodingPartUpdatePayload
 
@@ -58,14 +60,27 @@ async def blawx_encoding_guide(topic: str = "quickstart") -> dict[str, Any]:
     - Blawx JSON formatting expectations
     - suggested encoding workflow
 
-    Topics: quickstart | blawx-json | encodingpart | ontology | scasp | all
+    Topics: quickstart | blawx-json | valid-blawx-json | blawx-blocks | encodingpart | ontology | scasp | all
     """
+
+    available_topics = [
+        "quickstart",
+        "blawx-json",
+        "valid-blawx-json",
+        "blawx-blocks",
+        "encodingpart",
+        "ontology",
+        "scasp",
+        "all",
+    ]
 
     normalized = topic.strip().lower()
     guides = {
         "scasp": SCA_SP_GUIDE_MD,
         "ontology": ONTOLOGY_GUIDE_MD,
         "blawx-json": BLAWX_JSON_GUIDE_MD,
+        "valid-blawx-json": VALID_BLAWX_JSON_GUIDE_MD,
+        "blawx-blocks": BLAWX_BLOCKS_GUIDE_MD,
         "encodingpart": ENCODINGPART_GUIDE_MD,
     }
 
@@ -87,6 +102,10 @@ async def blawx_encoding_guide(topic: str = "quickstart") -> dict[str, Any]:
             f"{ENCODINGPART_GUIDE_MD}\n\n"
             "# Blawx JSON Blocks\n"
             f"{BLAWX_JSON_GUIDE_MD}\n\n"
+            "# Valid Blawx JSON Examples\n"
+            f"{VALID_BLAWX_JSON_GUIDE_MD}\n\n"
+            "# Blawx Blocks Reference\n"
+            f"{BLAWX_BLOCKS_GUIDE_MD}\n\n"
             "# Ontology\n"
             f"{ONTOLOGY_GUIDE_MD}\n\n"
             "# s(CASP)\n"
@@ -99,14 +118,14 @@ async def blawx_encoding_guide(topic: str = "quickstart") -> dict[str, Any]:
             "ok": False,
             "error": "Unknown topic",
             "requested_topic": topic,
-            "available_topics": ["quickstart", "blawx-json", "encodingpart", "ontology", "scasp", "all"],
+            "available_topics": available_topics,
         }
 
     return {
         "ok": True,
         "topic": normalized,
         "guidance_markdown": selected,
-        "available_topics": ["quickstart", "blawx-json", "encodingpart", "ontology", "scasp", "all"],
+        "available_topics": available_topics,
     }
 
 
