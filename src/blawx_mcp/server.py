@@ -1071,6 +1071,10 @@ async def blawx_get_explanation_full(
 async def blawx_legaldocs_list() -> dict[str, Any]:
     """List legal docs in the project.
 
+    This returns document-level metadata. To read legislation text, then call:
+    1) `blawx_legaldocparts_list` for the chosen legal doc
+    2) `blawx_legaldocpart_detail` for each relevant part
+
     Note: This MCP server currently does not expose tools to create/update/delete legaldocs.
     """
 
@@ -1079,12 +1083,24 @@ async def blawx_legaldocs_list() -> dict[str, Any]:
         base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
     )
     url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/legaldocs/"
-    return await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+    result = await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+    return {
+        **result,
+        "workflow_hint": (
+            "This is a document list. To read legal text, call blawx_legaldocparts_list "
+            "for a legal_doc_id, then call blawx_legaldocpart_detail for the relevant part(s)."
+        ),
+        "next_recommended_tool": "blawx_legaldocparts_list",
+    }
 
 
 @mcp.tool()
 async def blawx_legaldoc_detail(legal_doc_id: int) -> dict[str, Any]:
     """Get a legal doc by id.
+
+    This returns document-level metadata. To read the legislative text itself,
+    list parts with `blawx_legaldocparts_list` and then fetch part text with
+    `blawx_legaldocpart_detail`.
 
     Note: This MCP server currently does not expose tools to create/update/delete legaldocs.
     """
@@ -1094,12 +1110,23 @@ async def blawx_legaldoc_detail(legal_doc_id: int) -> dict[str, Any]:
         base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
     )
     url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/legaldocs/{legal_doc_id}/"
-    return await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+    result = await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+    return {
+        **result,
+        "workflow_hint": (
+            "This is legal-doc metadata. To read legal text, call blawx_legaldocparts_list "
+            "for this legal_doc_id, then call blawx_legaldocpart_detail for relevant part ids."
+        ),
+        "next_recommended_tool": "blawx_legaldocparts_list",
+    }
 
 
 @mcp.tool()
 async def blawx_legaldocparts_list(legal_doc_id: int) -> dict[str, Any]:
     """List parts for a legal doc.
+
+    This list is mainly navigational metadata (part ids/titles/order). To view the
+    actual legislation text for a part, call `blawx_legaldocpart_detail` for that part id.
 
     Note: This MCP server currently does not expose tools to create/update/delete legaldocparts.
     """
@@ -1112,12 +1139,23 @@ async def blawx_legaldocparts_list(legal_doc_id: int) -> dict[str, Any]:
         f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
         f"/legaldocs/{legal_doc_id}/parts/"
     )
-    return await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+    result = await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+    return {
+        **result,
+        "workflow_hint": (
+            "This is a parts list. To read the actual text, call blawx_legaldocpart_detail "
+            "for each relevant legal_doc_part_id."
+        ),
+        "next_recommended_tool": "blawx_legaldocpart_detail",
+    }
 
 
 @mcp.tool()
 async def blawx_legaldocpart_detail(legal_doc_id: int, legal_doc_part_id: int) -> dict[str, Any]:
-    """Get a single legal doc part by id."""
+    """Get a single legal doc part by id.
+
+    Use this tool to view the actual text/content for a legal doc part.
+    """
 
     settings = get_settings()
     team_id = await _resolve_team_id(
@@ -1127,7 +1165,11 @@ async def blawx_legaldocpart_detail(legal_doc_id: int, legal_doc_part_id: int) -
         f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
         f"/legaldocs/{legal_doc_id}/parts/{legal_doc_part_id}/"
     )
-    return await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+    result = await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+    return {
+        **result,
+        "workflow_hint": "This tool returns the part detail, including the legal text/content when present.",
+    }
 
 
 @mcp.tool()

@@ -82,12 +82,17 @@ An EncodingPart represents the code encoding of a specific legal-text segment.
 
 Typical agent flow:
 
-1. Fetch the legal text (or the relevant part) via legal-doc/part tools.
-2. Fetch ontology + examples if available.
-3. Generate a suggested encoding (s(CASP) or Blawx JSON) following the guides.
-4. Write back via the encoding tools:
+1. Fetch legal docs with `blawx_legaldocs_list` and pick the target `legal_doc_id`.
+2. Fetch parts via `blawx_legaldocparts_list`.
+3. Fetch the actual legal text/content for each relevant part with `blawx_legaldocpart_detail`.
+4. Fetch ontology + examples if available.
+5. Generate a suggested encoding (s(CASP) or Blawx JSON) following the guides.
+6. Write back via the encoding tools:
    - `blawx_encodingpart_update` (PUT)
    - `blawx_encodingpart_patch` (PATCH)
+
+Important: `blawx_legaldocparts_list` is primarily navigational metadata (ids/titles/order).
+Use `blawx_legaldocpart_detail` to read the text of a specific legal doc part.
 
 ## Important: what the write tools accept
 

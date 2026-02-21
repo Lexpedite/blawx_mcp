@@ -163,6 +163,14 @@ The API supports read-write legal documents and parts; for now this MCP server e
 - `blawx_legaldocparts_list`, `blawx_legaldocpart_detail`
 - `blawx_encoding_guide`, `blawx_encodingpart_get`, `blawx_encodingpart_update`, `blawx_encodingpart_delete`
 
+**To read legislation text, use this sequence:**
+
+1. `blawx_legaldocs_list` (or `blawx_legaldoc_detail`) to identify a `legal_doc_id`.
+2. `blawx_legaldocparts_list` to list part ids/titles/order for that document.
+3. `blawx_legaldocpart_detail` for each relevant `legal_doc_part_id` to retrieve the actual part text/content.
+
+`blawx_legaldocparts_list` is primarily navigational metadata; `blawx_legaldocpart_detail` is the tool that returns the text for a specific part.
+
 **Use this sequence first**:
 
 1. Call `blawx_encoding_guide` (topic `quickstart`, then `blawx-json` and `encodingpart`).
