@@ -17,7 +17,7 @@ from .guides import (
     ONTOLOGY_GUIDE_MD,
     SCA_SP_GUIDE_MD,
 )
-from .schemas import AskFactsPayload
+from .schemas import AskFactsPayload, EncodingPartUpdatePayload
 
 _TEAM_ID_CACHE: dict[str, int] = {}
 
@@ -49,110 +49,65 @@ mcp = FastMCP(
 )
 
 
-@mcp.resource(
-    "blawx://guides/scasp",
-    title="s(CASP) Encoding Guide",
-    description="Rules and workflow for generating s(CASP) encodings in Blawx.",
-    mime_type="text/markdown",
-)
-async def blawx_guide_scasp() -> str:
-    return SCA_SP_GUIDE_MD
+@mcp.tool()
+async def blawx_encoding_guide(topic: str = "quickstart") -> dict[str, Any]:
+    """Read this first before editing encoding parts.
 
+    Use this tool before `blawx_encodingpart_update` to learn:
+    - required request shape (`blawx_json` key only)
+    - Blawx JSON formatting expectations
+    - suggested encoding workflow
 
-@mcp.resource(
-    "blawx://guides/ontology",
-    title="Ontology Guide",
-    description="How Blawx ontologies structure categories and relationships, and how encodings should use them.",
-    mime_type="text/markdown",
-)
-async def blawx_guide_ontology() -> str:
-    return ONTOLOGY_GUIDE_MD
+    Topics: quickstart | blawx-json | encodingpart | ontology | scasp | all
+    """
 
+    normalized = topic.strip().lower()
+    guides = {
+        "scasp": SCA_SP_GUIDE_MD,
+        "ontology": ONTOLOGY_GUIDE_MD,
+        "blawx-json": BLAWX_JSON_GUIDE_MD,
+        "encodingpart": ENCODINGPART_GUIDE_MD,
+    }
 
-@mcp.resource(
-    "blawx://guides/blawx-json",
-    title="Blawx JSON Blocks Guide",
-    description="How to represent Blawx visual blocks in JSON (for LLM-generated encodings).",
-    mime_type="text/markdown",
-)
-async def blawx_guide_blawx_json() -> str:
-    return BLAWX_JSON_GUIDE_MD
-
-
-@mcp.resource(
-    "blawx://guides/encodingpart",
-    title="EncodingPart Workflow",
-    description="Typical agent workflow for fetching text/ontology/examples and writing EncodingParts.",
-    mime_type="text/markdown",
-)
-async def blawx_guide_encodingpart() -> str:
-    return ENCODINGPART_GUIDE_MD
-
-
-@mcp.prompt(
-    title="Suggest s(CASP) Encoding",
-    description="Generates a structured s(CASP) encoding suggestion based on ontology + examples + target text.",
-)
-def blawx_prompt_scasp_encoding(*, ontology: str, examples: str, target_text: str) -> list[dict[str, Any]]:
-    guide = (
-        "You are BlawxBot, a code generation assistant. You generate code in the s(CASP) language "
-        "representing the meaning of small segments of legislative or regulatory text.\n\n"
-        "Follow the s(CASP) constraints and workflow in the attached guide.\n\n"
-        "Return your work in these sections: (1) facts+implications, (2) ontology mapping+recommendations, "
-        "(3) pseudocode, (4) s(CASP) code.\n"
+    quickstart = (
+        "Use `blawx_encodingpart_get` to inspect current encoding first.\n"
+        "When writing, call `blawx_encodingpart_update` with only this shape:\n"
+        "`{\"blawx_json\": <json object>}`\n"
+        "Do not send `content`, `scasp_encoding`, or stringified JSON.\n"
+        "Read `blawx-json` and `encodingpart` topics before generating payloads."
     )
-    return [
-        {
-            "role": "user",
-            "content": [
-                {"type": "text", "text": guide},
-                {
-                    "type": "resource",
-                    "resource": {"uri": "blawx://guides/scasp", "text": SCA_SP_GUIDE_MD},
-                },
-                {
-                    "type": "resource",
-                    "resource": {"uri": "blawx://guides/ontology", "text": ONTOLOGY_GUIDE_MD},
-                },
-                {"type": "text", "text": f"\nOntology:\n{ontology}\n"},
-                {"type": "text", "text": f"\nExamples:\n{examples}\n"},
-                {"type": "text", "text": f"\nTarget text (encode only the bracketed portion if present):\n{target_text}\n"},
-            ],
-        }
-    ]
 
-
-@mcp.prompt(
-    title="Suggest Blawx JSON Blocks Encoding",
-    description="Generates a structured Blawx JSON blocks encoding suggestion based on ontology + examples + target text.",
-)
-def blawx_prompt_blawx_json_encoding(*, ontology: str, examples: str, target_text: str) -> list[dict[str, Any]]:
-    guide = (
-        "You are BlawxBot, a code generation assistant. You generate Blawx visual-language encodings "
-        "serialized as JSON blocks.\n\n"
-        "Follow the Blawx JSON constraints and workflow in the attached guide.\n\n"
-        "Return your work in these sections: (1) facts+implications, (2) ontology phrasing/pseudocode, "
-        "(3) Blawx JSON (must be valid JSON, not a string).\n"
-    )
-    return [
-        {
-            "role": "user",
-            "content": [
-                {"type": "text", "text": guide},
-                {
-                    "type": "resource",
-                    "resource": {"uri": "blawx://guides/blawx-json", "text": BLAWX_JSON_GUIDE_MD},
-                },
-                {
-                    "type": "resource",
-                    "resource": {"uri": "blawx://guides/ontology", "text": ONTOLOGY_GUIDE_MD},
-                },
-                {"type": "text", "text": f"\nOntology:\n{ontology}\n"},
-                {"type": "text", "text": f"\nExamples:\n{examples}\n"},
-                {"type": "text", "text": f"\nTarget text (encode only the bracketed portion if present):\n{target_text}\n"},
-            ],
+    if normalized == "quickstart":
+        selected = quickstart
+    elif normalized == "all":
+        selected = (
+            "# Quickstart\n"
+            f"{quickstart}\n\n"
+            "# EncodingPart Workflow\n"
+            f"{ENCODINGPART_GUIDE_MD}\n\n"
+            "# Blawx JSON Blocks\n"
+            f"{BLAWX_JSON_GUIDE_MD}\n\n"
+            "# Ontology\n"
+            f"{ONTOLOGY_GUIDE_MD}\n\n"
+            "# s(CASP)\n"
+            f"{SCA_SP_GUIDE_MD}"
+        )
+    elif normalized in guides:
+        selected = guides[normalized]
+    else:
+        return {
+            "ok": False,
+            "error": "Unknown topic",
+            "requested_topic": topic,
+            "available_topics": ["quickstart", "blawx-json", "encodingpart", "ontology", "scasp", "all"],
         }
-    ]
+
+    return {
+        "ok": True,
+        "topic": normalized,
+        "guidance_markdown": selected,
+        "available_topics": ["quickstart", "blawx-json", "encodingpart", "ontology", "scasp", "all"],
+    }
 
 
 async def _request_body(
@@ -440,27 +395,6 @@ async def blawx_ontology_category_update(category_id: int, payload: dict[str, An
 
 
 @mcp.tool()
-async def blawx_ontology_category_patch(category_id: int, patch: dict[str, Any]) -> dict[str, Any]:
-    """Partially update an ontology category (PATCH)."""
-
-    settings = get_settings()
-    team_id = await _resolve_team_id(
-        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
-    )
-    url = (
-        f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
-        f"/ontology/categories/{category_id}/"
-    )
-    return await _request_json(
-        method="PATCH",
-        url=url,
-        api_key=settings.api_key,
-        json_body=patch,
-        timeout_seconds=30.0,
-    )
-
-
-@mcp.tool()
 async def blawx_ontology_category_delete(category_id: int) -> dict[str, Any]:
     """Delete an ontology category."""
 
@@ -546,27 +480,6 @@ async def blawx_ontology_relationship_update(relationship_id: int, payload: dict
         url=url,
         api_key=settings.api_key,
         json_body=payload,
-        timeout_seconds=30.0,
-    )
-
-
-@mcp.tool()
-async def blawx_ontology_relationship_patch(relationship_id: int, patch: dict[str, Any]) -> dict[str, Any]:
-    """Partially update an ontology relationship (PATCH)."""
-
-    settings = get_settings()
-    team_id = await _resolve_team_id(
-        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
-    )
-    url = (
-        f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
-        f"/ontology/relationships/{relationship_id}/"
-    )
-    return await _request_json(
-        method="PATCH",
-        url=url,
-        api_key=settings.api_key,
-        json_body=patch,
         timeout_seconds=30.0,
     )
 
@@ -661,29 +574,6 @@ async def blawx_ontology_relationship_parameter_detail(relationship_id: int, par
 
 
 @mcp.tool()
-async def blawx_ontology_relationship_parameter_patch(
-    relationship_id: int, parameter_id: int, patch: dict[str, Any]
-) -> dict[str, Any]:
-    """Partially update a relationship parameter definition (PATCH)."""
-
-    settings = get_settings()
-    team_id = await _resolve_team_id(
-        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
-    )
-    url = (
-        f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
-        f"/ontology/relationships/{relationship_id}/parameters/{parameter_id}/"
-    )
-    return await _request_json(
-        method="PATCH",
-        url=url,
-        api_key=settings.api_key,
-        json_body=patch,
-        timeout_seconds=30.0,
-    )
-
-
-@mcp.tool()
 async def blawx_ontology_relationship_parameter_delete(relationship_id: int, parameter_id: int) -> dict[str, Any]:
     """Delete a relationship parameter definition."""
 
@@ -757,24 +647,6 @@ async def blawx_fact_scenario_update(fact_scenario_id: int, payload: dict[str, A
         url=url,
         api_key=settings.api_key,
         json_body=payload,
-        timeout_seconds=30.0,
-    )
-
-
-@mcp.tool()
-async def blawx_fact_scenario_patch(fact_scenario_id: int, patch: dict[str, Any]) -> dict[str, Any]:
-    """Partially update a fact scenario (PATCH)."""
-
-    settings = get_settings()
-    team_id = await _resolve_team_id(
-        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
-    )
-    url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/facts/{fact_scenario_id}/"
-    return await _request_json(
-        method="PATCH",
-        url=url,
-        api_key=settings.api_key,
-        json_body=patch,
         timeout_seconds=30.0,
     )
 
@@ -873,24 +745,6 @@ async def blawx_question_update(question_id: int, payload: dict[str, Any]) -> di
         url=url,
         api_key=settings.api_key,
         json_body=payload,
-        timeout_seconds=30.0,
-    )
-
-
-@mcp.tool()
-async def blawx_question_patch(question_id: int, patch: dict[str, Any]) -> dict[str, Any]:
-    """Partially update a question (PATCH)."""
-
-    settings = get_settings()
-    team_id = await _resolve_team_id(
-        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
-    )
-    url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/questions/{question_id}/"
-    return await _request_json(
-        method="PATCH",
-        url=url,
-        api_key=settings.api_key,
-        json_body=patch,
         timeout_seconds=30.0,
     )
 
@@ -1280,10 +1134,8 @@ async def blawx_legaldocpart_detail(legal_doc_id: int, legal_doc_part_id: int) -
 async def blawx_encodingpart_get(legal_doc_id: int, legal_doc_part_id: int) -> dict[str, Any]:
     """Get the encoding for a specific legal doc part.
 
-    See guidance resources:
-    - blawx://guides/encodingpart
-    - blawx://guides/scasp
-    - blawx://guides/blawx-json
+    Use `blawx_encoding_guide` first (topic: quickstart, then blawx-json/encodingpart)
+    before creating or editing encoding payloads.
     """
 
     settings = get_settings()
@@ -1299,18 +1151,14 @@ async def blawx_encodingpart_get(legal_doc_id: int, legal_doc_part_id: int) -> d
 
 @mcp.tool()
 async def blawx_encodingpart_update(
-    legal_doc_id: int, legal_doc_part_id: int, blawx_json: dict[str, Any]
+    legal_doc_id: int, legal_doc_part_id: int, payload: EncodingPartUpdatePayload
 ) -> dict[str, Any]:
     """Replace the encoding for a legal doc part (PUT).
 
-    This tool intentionally only accepts the **Blawx JSON blocks** representation for the encoding.
-    Do **not** supply s(CASP) code (or any other derived representation). Blawx should (re)calculate
-    the s(CASP) encoding when the JSON changes.
+    Read `blawx_encoding_guide` first. This tool accepts only this payload shape:
+    {"blawx_json": <json object>}
 
-    For JSON constraints and modeling workflow, see:
-    - blawx://guides/encodingpart
-    - blawx://guides/blawx-json
-    - blawx://guides/ontology
+    Do not send `content`, `scasp_encoding`, or stringified JSON.
     """
 
     settings = get_settings()
@@ -1325,47 +1173,17 @@ async def blawx_encodingpart_update(
         method="PUT",
         url=url,
         api_key=settings.api_key,
-        json_body={"blawx_json": blawx_json},
-        timeout_seconds=60.0,
-    )
-
-
-@mcp.tool()
-async def blawx_encodingpart_patch(
-    legal_doc_id: int, legal_doc_part_id: int, blawx_json: dict[str, Any]
-) -> dict[str, Any]:
-    """Partially update the encoding for a legal doc part (PATCH).
-
-    This tool intentionally only accepts the **Blawx JSON blocks** representation for the encoding.
-    Do **not** supply s(CASP) code (or any other derived representation). Blawx should (re)calculate
-    the s(CASP) encoding when the JSON changes.
-
-    For JSON constraints and modeling workflow, see:
-    - blawx://guides/encodingpart
-    - blawx://guides/blawx-json
-    - blawx://guides/ontology
-    """
-
-    settings = get_settings()
-    team_id = await _resolve_team_id(
-        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
-    )
-    url = (
-        f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
-        f"/legaldocs/{legal_doc_id}/parts/{legal_doc_part_id}/encoding/"
-    )
-    return await _request_json(
-        method="PATCH",
-        url=url,
-        api_key=settings.api_key,
-        json_body={"blawx_json": blawx_json},
+        json_body=payload.model_dump(),
         timeout_seconds=60.0,
     )
 
 
 @mcp.tool()
 async def blawx_encodingpart_delete(legal_doc_id: int, legal_doc_part_id: int) -> dict[str, Any]:
-    """Delete the encoding for a legal doc part."""
+    """Delete the encoding for a legal doc part.
+
+    Use `blawx_encoding_guide` if you need to recreate the encoding with the correct payload shape.
+    """
 
     settings = get_settings()
     team_id = await _resolve_team_id(

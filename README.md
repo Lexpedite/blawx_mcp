@@ -101,6 +101,8 @@ fact scenarios, and vocabulary.
 
 Additional read-write tools are also available for project editing (questions, fact scenarios, ontology categories/relationships/parameters).
 
+Patch-style tools are intentionally not exposed in this MCP server to reduce tool-selection ambiguity.
+
 ### Ask Questions
 
 - `blawx_question_ask_with_fact_scenario`: asks a question using a stored fact scenario.
@@ -159,9 +161,25 @@ The API supports read-write legal documents and parts; for now this MCP server e
 
 - `blawx_legaldocs_list`, `blawx_legaldoc_detail`
 - `blawx_legaldocparts_list`, `blawx_legaldocpart_detail`
-- `blawx_encodingpart_get`, `blawx_encodingpart_update`, `blawx_encodingpart_patch`, `blawx_encodingpart_delete`
+- `blawx_encoding_guide`, `blawx_encodingpart_get`, `blawx_encodingpart_update`, `blawx_encodingpart_delete`
 
-**EncodingPart write tools**: `blawx_encodingpart_update` and `blawx_encodingpart_patch` intentionally accept only the **Blawx JSON blocks** encoding. s(CASP) should be derived/recalculated by Blawx when the JSON changes.
+**Use this sequence first**:
+
+1. Call `blawx_encoding_guide` (topic `quickstart`, then `blawx-json` and `encodingpart`).
+2. Call `blawx_encodingpart_get` to inspect existing encoding.
+3. Call `blawx_encodingpart_update` with payload shape:
+
+```json
+{
+	"payload": {
+		"blawx_json": {
+			"...": "..."
+		}
+	}
+}
+```
+
+`blawx_encodingpart_update` accepts only **Blawx JSON blocks** via `payload.blawx_json`. Do not send `content`, `scasp_encoding`, or stringified JSON.
 
 **NB**: The other three parts should be read alongisde the
 attributes, or relevant information may be missing. This

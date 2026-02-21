@@ -18,10 +18,24 @@ These models are used to:
 from __future__ import annotations
 
 import json
-from typing import List, Optional, Union
+from typing import Any, List, Optional, Union
 from typing_extensions import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel
+
+
+class EncodingPartUpdatePayload(BaseModel):
+    """Payload for encoding part writes.
+
+    The payload must include only `blawx_json`.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    blawx_json: dict[str, Any] = Field(
+        ...,
+        description="Blawx visual blocks JSON for the encoding part.",
+    )
 
 
 class VariableRef(BaseModel):
