@@ -1299,14 +1299,17 @@ async def blawx_encodingpart_get(legal_doc_id: int, legal_doc_part_id: int) -> d
 
 @mcp.tool()
 async def blawx_encodingpart_update(
-    legal_doc_id: int, legal_doc_part_id: int, payload: dict[str, Any]
+    legal_doc_id: int, legal_doc_part_id: int, blawx_json: dict[str, Any]
 ) -> dict[str, Any]:
     """Replace the encoding for a legal doc part (PUT).
 
-    This tool writes an EncodingPart. Ensure the payload matches what the Blawx server expects.
-    For language constraints and modeling workflow, see:
+    This tool intentionally only accepts the **Blawx JSON blocks** representation for the encoding.
+    Do **not** supply s(CASP) code (or any other derived representation). Blawx should (re)calculate
+    the s(CASP) encoding when the JSON changes.
+
+    For JSON constraints and modeling workflow, see:
     - blawx://guides/encodingpart
-    - blawx://guides/scasp
+    - blawx://guides/blawx-json
     - blawx://guides/ontology
     """
 
@@ -1322,20 +1325,24 @@ async def blawx_encodingpart_update(
         method="PUT",
         url=url,
         api_key=settings.api_key,
-        json_body=payload,
+        json_body={"blawx_json": blawx_json},
         timeout_seconds=60.0,
     )
 
 
 @mcp.tool()
 async def blawx_encodingpart_patch(
-    legal_doc_id: int, legal_doc_part_id: int, patch: dict[str, Any]
+    legal_doc_id: int, legal_doc_part_id: int, blawx_json: dict[str, Any]
 ) -> dict[str, Any]:
     """Partially update the encoding for a legal doc part (PATCH).
 
-    For language constraints and modeling workflow, see:
+    This tool intentionally only accepts the **Blawx JSON blocks** representation for the encoding.
+    Do **not** supply s(CASP) code (or any other derived representation). Blawx should (re)calculate
+    the s(CASP) encoding when the JSON changes.
+
+    For JSON constraints and modeling workflow, see:
     - blawx://guides/encodingpart
-    - blawx://guides/scasp
+    - blawx://guides/blawx-json
     - blawx://guides/ontology
     """
 
@@ -1351,7 +1358,7 @@ async def blawx_encodingpart_patch(
         method="PATCH",
         url=url,
         api_key=settings.api_key,
-        json_body=patch,
+        json_body={"blawx_json": blawx_json},
         timeout_seconds=60.0,
     )
 

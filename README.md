@@ -161,6 +161,8 @@ The API supports read-write legal documents and parts; for now this MCP server e
 - `blawx_legaldocparts_list`, `blawx_legaldocpart_detail`
 - `blawx_encodingpart_get`, `blawx_encodingpart_update`, `blawx_encodingpart_patch`, `blawx_encodingpart_delete`
 
+**EncodingPart write tools**: `blawx_encodingpart_update` and `blawx_encodingpart_patch` intentionally accept only the **Blawx JSON blocks** encoding. s(CASP) should be derived/recalculated by Blawx when the JSON changes.
+
 **NB**: The other three parts should be read alongisde the
 attributes, or relevant information may be missing. This
 instruction is provided to the agent, but if it isn't followed
