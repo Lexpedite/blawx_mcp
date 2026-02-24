@@ -14,6 +14,7 @@ from .config import get_settings
 from .guides import (
     BLAWX_BLOCKS_GUIDE_MD,
     BLAWX_JSON_GUIDE_MD,
+    ENCODING_EXAMPLES_GUIDE_MD,
     ENCODINGPART_GUIDE_MD,
     ONTOLOGY_GUIDE_MD,
     SCA_SP_GUIDE_MD,
@@ -60,7 +61,7 @@ async def blawx_encoding_guide(topic: str = "quickstart") -> dict[str, Any]:
     - Blawx JSON formatting expectations
     - suggested encoding workflow
 
-    Topics: quickstart | blawx-json | valid-blawx-json | blawx-blocks | encodingpart | ontology | scasp | all
+    Topics: quickstart | blawx-json | valid-blawx-json | blawx-blocks | encodingpart | encoding-examples | ontology | scasp | all
     """
 
     available_topics = [
@@ -69,6 +70,7 @@ async def blawx_encoding_guide(topic: str = "quickstart") -> dict[str, Any]:
         "valid-blawx-json",
         "blawx-blocks",
         "encodingpart",
+        "encoding-examples",
         "ontology",
         "scasp",
         "all",
@@ -82,6 +84,7 @@ async def blawx_encoding_guide(topic: str = "quickstart") -> dict[str, Any]:
         "valid-blawx-json": VALID_BLAWX_JSON_GUIDE_MD,
         "blawx-blocks": BLAWX_BLOCKS_GUIDE_MD,
         "encodingpart": ENCODINGPART_GUIDE_MD,
+        "encoding-examples": ENCODING_EXAMPLES_GUIDE_MD,
     }
 
     quickstart = (
@@ -108,6 +111,8 @@ async def blawx_encoding_guide(topic: str = "quickstart") -> dict[str, Any]:
             f"{BLAWX_BLOCKS_GUIDE_MD}\n\n"
             "# Ontology\n"
             f"{ONTOLOGY_GUIDE_MD}\n\n"
+            "# Encoding Examples\n"
+            f"{ENCODING_EXAMPLES_GUIDE_MD}\n\n"
             "# s(CASP)\n"
             f"{SCA_SP_GUIDE_MD}"
         )

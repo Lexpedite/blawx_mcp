@@ -174,6 +174,9 @@ The API supports read-write legal documents and parts; for now this MCP server e
 **Use this sequence first**:
 
 1. Call `blawx_encoding_guide` (topic `quickstart`, then `blawx-json` and `encodingpart`).
+	Additional available topics include:
+	- `valid-blawx-json`: concrete valid payload patterns for `blawx_json`
+	- `blawx-blocks`: quick reference of available block types and required components
 2. Call `blawx_encodingpart_get` to inspect existing encoding.
 3. Call `blawx_encodingpart_update` with payload shape:
 

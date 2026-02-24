@@ -61,15 +61,17 @@ If a block has no named args, required components are shown as `none`.
 
 ## Relationship blocks
 
-- `relationship_selector`: fields `prefix1`, `prefix2`, `prefix3`, `postfix`; inputs `first_element`, `second_element`, `third_element`; extraState `relationship_name` (and optional `arity`)
-- `relationship_selector3`: fields `prefix1`, `prefix2`, `prefix3`, `postfix`; inputs `parameter1`, `parameter2`, `parameter3`; extraState `relationship_name` (and optional `arity`)
-- `relationship_selector4`: fields `prefix1`..`prefix4`, `postfix`; inputs `parameter1`..`parameter4`; extraState `relationship_name` (and optional `arity`)
-- `relationship_selector5`: fields `prefix1`..`prefix5`, `postfix`; inputs `parameter1`..`parameter5`; extraState `relationship_name` (and optional `arity`)
-- `relationship_selector6`: fields `prefix1`..`prefix6`, `postfix`; inputs `parameter1`..`parameter6`; extraState `relationship_name` (and optional `arity`)
-- `relationship_selector7`: fields `prefix1`..`prefix7`, `postfix`; inputs `parameter1`..`parameter7`; extraState `relationship_name` (and optional `arity`)
-- `relationship_selector8`: fields `prefix1`..`prefix8`, `postfix`; inputs `parameter1`..`parameter8`; extraState `relationship_name` (and optional `arity`)
-- `relationship_selector9`: fields `prefix1`..`prefix9`, `postfix`; inputs `parameter1`..`parameter9`; extraState `relationship_name` (and optional `arity`)
-- `relationship_selector10`: fields `prefix1`..`prefix10`, `postfix`; inputs `parameter1`..`parameter10`; extraState `relationship_name` (and optional `arity`)
+- `relationship_selector0`: fields `prefix`; extraState `relationship_name`, `arity`
+- `relationship_selector1`: fields `prefix`, `postfix1`; inputs `parameter1`; extraState `relationship_name`, `arity`
+- `relationship_selector2`: fields `prefix`, `postfix1`, `postfix2`; inputs `parameter1`, `parameter2`; extraState `relationship_name`, `arity`
+- `relationship_selector3`: fields `prefix`, `postfix1`, `postfix2`, `postfix3`; inputs `parameter1`, `parameter2`, `parameter3`; extraState `relationship_name`, `arity`
+- `relationship_selector4`: fields `prefix`, `postfix1`, `postfix2`, `postfix3`, `postfix4`; inputs `parameter1`, `parameter2`, `parameter3`, `parameter4`; extraState `relationship_name`, `arity`
+- `relationship_selector5`: fields `prefix`, `postfix1`, `postfix2`, `postfix3`, `postfix4`, `postfix5`; inputs `parameter1`, `parameter2`, `parameter3`, `parameter4`, `parameter5`; extraState `relationship_name`, `arity`
+- `relationship_selector6`: fields `prefix`, `postfix1`, `postfix2`, `postfix3`, `postfix4`, `postfix5`, `postfix6`; inputs `parameter1`, `parameter2`, `parameter3`, `parameter4`, `parameter5`, `parameter6`; extraState `relationship_name`, `arity`
+- `relationship_selector7`: fields `prefix`, `postfix1`, `postfix2`, `postfix3`, `postfix4`, `postfix5`, `postfix6`, `postfix7`; inputs `parameter1`, `parameter2`, `parameter3`, `parameter4`, `parameter5`, `parameter6`, `parameter7`; extraState `relationship_name`, `arity`
+- `relationship_selector8`: fields `prefix`, `postfix1`, `postfix2`, `postfix3`, `postfix4`, `postfix5`, `postfix6`, `postfix7`, `postfix8`; inputs `parameter1`, `parameter2`, `parameter3`, `parameter4`, `parameter5`, `parameter6`, `parameter7`, `parameter8`; extraState `relationship_name`, `arity`
+- `relationship_selector9`: fields `prefix`, `postfix1`, `postfix2`, `postfix3`, `postfix4`, `postfix5`, `postfix6`, `postfix7`, `postfix8`, `postfix9`; inputs `parameter1`, `parameter2`, `parameter3`, `parameter4`, `parameter5`, `parameter6`, `parameter7`, `parameter8`, `parameter9`; extraState `relationship_name`, `arity`
+- `relationship_selector10`: fields `prefix`, `postfix1`, `postfix2`, `postfix3`, `postfix4`, `postfix5`, `postfix6`, `postfix7`, `postfix8`, `postfix9`, `postfix10`; inputs `parameter1`, `parameter2`, `parameter3`, `parameter4`, `parameter5`, `parameter6`, `parameter7`, `parameter8`, `parameter9`, `parameter10`; extraState `relationship_name`, `arity`
 
 ---
 
