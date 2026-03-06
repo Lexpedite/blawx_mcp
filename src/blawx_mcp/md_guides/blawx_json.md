@@ -2,6 +2,15 @@
 
 Blawx’s visual language serializes into a JSON structure of blocks.
 
+This guide covers JSON/block structure only.
+
+For end-to-end section selection, ontology planning, testing flow, and iteration process, use `encoding-process`.
+
+## Tool touchpoints
+
+- Read/write encoding parts: `blawx_encodingpart_get`, `blawx_encodingpart_update`
+- Reference material: `blawx_encoding_guide` topics `blawx-blocks`, `valid-blawx-json`, `encoding-examples`
+
 ## Block JSON shape
 
 Blocks can include: `type`, `inputs`, `fields`, `extraState`, and (for statement blocks) `next`.
@@ -18,10 +27,4 @@ Blocks can include: `type`, `inputs`, `fields`, `extraState`, and (for statement
 - Prefer category-membership tests early in rule conditions when possible.
 - Prefer brief but semantically meaningful variable names ("Person" over "X")
 
-## Suggested workflow (structured output)
-
-1. List logical facts and implications.
-2. Draft natural-language pseudocode using the ontology terms.
-3. Produce valid Blawx JSON blocks (not a string) that match the selected block types.
-
-Examples of encodings are available in another guide.
+Examples of encodings are available in `encoding-examples` and validation-oriented examples are in `valid-blawx-json`.

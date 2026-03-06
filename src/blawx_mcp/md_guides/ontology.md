@@ -5,6 +5,16 @@ Blawx ontologies define two predicate families:
 - **Categories**: unary predicates (e.g., `dog/1`), used for typing.
 - **Relationships**: predicates with arity 0–10, with typed parameters.
 
+Blawx code can also define symbols, which are called
+"objects", by using the object declaration block, which
+requires that objects be placed in an initial category.
+
+If you want a unary predicate to represent an ontological
+type, use a category. If you want a unary predicate to
+represent a binary property of an entity, use a unary
+relationship. If you want to deal with identity, use
+objects.
+
 ## Rules
 
 - Parameters are typed using categories or supported datatypes (numbers, dates, datetimes, times, durations).

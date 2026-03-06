@@ -58,9 +58,10 @@ async def blawx_encoding_guide(topic: str = "quickstart") -> dict[str, Any]:
     """Read this first before editing encoding parts.
 
     Use this tool before `blawx_encodingpart_update` to learn:
+    - primary end-to-end workflow (`encoding-process`)
     - required request shape (`blawx_json` key only)
     - Blawx JSON formatting expectations
-    - suggested encoding workflow
+    - supporting reference guides
 
     Topics: quickstart | blawx-json | valid-blawx-json | blawx-blocks | encodingpart | encoding-process | encoding-examples | ontology | scasp | all
     """
@@ -91,11 +92,15 @@ async def blawx_encoding_guide(topic: str = "quickstart") -> dict[str, Any]:
     }
 
     quickstart = (
+        "Start with `encoding-process` for the canonical workflow.\n"
+        "Then read `encodingpart` for write-tool contract details.\n"
+        "Then read `blawx-json` and `blawx-blocks` for block-shape guidance.\n"
+        "Use `valid-blawx-json` and `encoding-examples` for concrete patterns.\n"
         "Use `blawx_encodingpart_get` to inspect current encoding first.\n"
         "When writing, call `blawx_encodingpart_update` with only this shape:\n"
         "`{\"blawx_json\": <json object>}`\n"
         "Do not send `content`, `scasp_encoding`, or stringified JSON.\n"
-        "Read `blawx-json` and `encodingpart` topics before generating payloads."
+        "If ontology terms are unclear, read `ontology` before writing blocks."
     )
 
     if normalized == "quickstart":

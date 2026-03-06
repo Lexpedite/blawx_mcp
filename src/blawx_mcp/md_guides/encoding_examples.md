@@ -1,3 +1,10 @@
+For the full authoring/testing loop, use `encoding-process` first.
+
+## Tool touchpoints
+
+- `blawx_encodingpart_get`: inspect existing encoding before replacement
+- `blawx_encodingpart_update`: apply adapted examples as `blawx_json`
+
 ```yaml
 - - Text: "Rock paper scissors is a game played between two players."
 

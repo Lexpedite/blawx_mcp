@@ -2,6 +2,13 @@
 
 This document gives example payloads for the EncodingPart MCP tools.
 
+For the full authoring/testing loop, use `encoding-process` first.
+
+## Tool touchpoints
+
+- `blawx_encodingpart_get`: inspect current content before replacing
+- `blawx_encodingpart_update`: submit payload with `blawx_json`
+
 ## Payload contract for EncodingPart write tools
 
 Use this shape:
