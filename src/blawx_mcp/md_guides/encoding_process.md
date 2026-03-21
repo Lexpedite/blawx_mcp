@@ -54,6 +54,16 @@ For ontology-specific design rules and NLG constraints, read guide topic: `ontol
 
 Create or select fact scenarios and questions that can verify both positive and negative behavior.
 
+When creating/updating test assets with MCP write tools:
+
+- `blawx_question_create`, `blawx_question_update`, `blawx_fact_scenario_create`, and `blawx_fact_scenario_update` require all of:
+  - `name`
+  - `slug`
+  - `blawx_json`
+- Questions also support `shared` (boolean). Set `shared=true` when you intend to discover/use the question via shared-question read tools.
+- If a question is non-shared, use `blawx_questions_list_all` / `blawx_question_detail_all` instead of shared-question tools.
+- `blawx_encodingpart_update` is different and accepts only `blawx_json`.
+
 - Include tests for expected conclusions.
 - Include tests for expected failure cases where appropriate.
 - Consider whether negation-as-failure behavior needs explicit test cases.

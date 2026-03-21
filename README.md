@@ -101,6 +101,22 @@ fact scenarios, and vocabulary.
 
 Additional read-write tools are also available for project editing (questions, fact scenarios, ontology categories/relationships/parameters).
 
+For write operations:
+
+- `blawx_encodingpart_update`, `blawx_question_create`, `blawx_question_update`, `blawx_fact_scenario_create`, and `blawx_fact_scenario_update` all use the same payload shape:
+
+```json
+{
+	"payload": {
+		"blawx_json": {
+			"...": "..."
+		}
+	}
+}
+```
+
+For question saves specifically, the encoding is expected to include a single outer question block.
+
 Patch-style tools are intentionally not exposed in this MCP server to reduce tool-selection ambiguity.
 
 ### Ask Questions

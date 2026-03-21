@@ -21,7 +21,12 @@ from .guides import (
     SCA_SP_GUIDE_MD,
     VALID_BLAWX_JSON_GUIDE_MD,
 )
-from .schemas import AskFactsPayload, EncodingPartUpdatePayload
+from .schemas import (
+    AskFactsPayload,
+    EncodingPartUpdatePayload,
+    FactScenarioPayload,
+    QuestionPayload,
+)
 
 _TEAM_ID_CACHE: dict[str, int] = {}
 
@@ -635,10 +640,10 @@ async def blawx_fact_scenarios_list() -> dict[str, Any]:
 
 
 @mcp.tool()
-async def blawx_fact_scenario_create(payload: dict[str, Any]) -> dict[str, Any]:
+async def blawx_fact_scenario_create(payload: FactScenarioPayload) -> dict[str, Any]:
     """Create a new fact scenario.
 
-    The request schema depends on the server; pass the JSON body as a dict.
+    Uses the same workspace payload shape as `blawx_encodingpart_update`.
     """
 
     settings = get_settings()
@@ -650,7 +655,7 @@ async def blawx_fact_scenario_create(payload: dict[str, Any]) -> dict[str, Any]:
         method="POST",
         url=url,
         api_key=settings.api_key,
-        json_body=payload,
+        json_body=payload.model_dump(),
         timeout_seconds=30.0,
     )
 
@@ -668,8 +673,13 @@ async def blawx_fact_scenario_detail(fact_scenario_id: int) -> dict[str, Any]:
 
 
 @mcp.tool()
-async def blawx_fact_scenario_update(fact_scenario_id: int, payload: dict[str, Any]) -> dict[str, Any]:
-    """Replace a fact scenario (PUT)."""
+async def blawx_fact_scenario_update(
+    fact_scenario_id: int, payload: FactScenarioPayload
+) -> dict[str, Any]:
+    """Replace a fact scenario (PUT).
+
+    Uses the same workspace payload shape as `blawx_encodingpart_update`.
+    """
 
     settings = get_settings()
     team_id = await _resolve_team_id(
@@ -680,7 +690,7 @@ async def blawx_fact_scenario_update(fact_scenario_id: int, payload: dict[str, A
         method="PUT",
         url=url,
         api_key=settings.api_key,
-        json_body=payload,
+        json_body=payload.model_dump(),
         timeout_seconds=30.0,
     )
 
@@ -748,8 +758,12 @@ async def blawx_question_detail_all(question_id: int) -> dict[str, Any]:
 
 
 @mcp.tool()
-async def blawx_question_create(payload: dict[str, Any]) -> dict[str, Any]:
-    """Create a new question in the project."""
+async def blawx_question_create(payload: QuestionPayload) -> dict[str, Any]:
+    """Create a new question in the project.
+
+    Uses the same workspace payload shape as `blawx_encodingpart_update`.
+    A question encoding is expected to include one outer question block.
+    """
 
     settings = get_settings()
     team_id = await _resolve_team_id(
@@ -760,14 +774,18 @@ async def blawx_question_create(payload: dict[str, Any]) -> dict[str, Any]:
         method="POST",
         url=url,
         api_key=settings.api_key,
-        json_body=payload,
+        json_body=payload.model_dump(),
         timeout_seconds=30.0,
     )
 
 
 @mcp.tool()
-async def blawx_question_update(question_id: int, payload: dict[str, Any]) -> dict[str, Any]:
-    """Replace a question (PUT)."""
+async def blawx_question_update(question_id: int, payload: QuestionPayload) -> dict[str, Any]:
+    """Replace a question (PUT).
+
+    Uses the same workspace payload shape as `blawx_encodingpart_update`.
+    A question encoding is expected to include one outer question block.
+    """
 
     settings = get_settings()
     team_id = await _resolve_team_id(
@@ -778,7 +796,7 @@ async def blawx_question_update(question_id: int, payload: dict[str, Any]) -> di
         method="PUT",
         url=url,
         api_key=settings.api_key,
-        json_body=payload,
+        json_body=payload.model_dump(),
         timeout_seconds=30.0,
     )
 
