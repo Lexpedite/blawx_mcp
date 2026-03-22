@@ -253,6 +253,29 @@ def _public_part_name(internal: str) -> str:
     return _PART_INTERNAL_TO_PUBLIC.get(internal, internal)
 
 
+def _annotate_blawx_json_error(result: dict[str, Any]) -> dict[str, Any]:
+    """If *result* is an error response from a blawx_json write tool, append
+    guidance that points the agent to the relevant guide topics.
+
+    The original ``body`` and all other keys are preserved unchanged; a
+    ``guidance`` key is added only when ``ok`` is False.
+    """
+    if result.get("ok"):
+        return result
+    result["guidance"] = (
+        "This error was returned by the Blawx server for a blawx_json write. "
+        "To understand and fix the problem, call `blawx_encoding_guide` with "
+        "one or more of these topics:\n"
+        "- 'blawx-blocks'  — complete block-type reference (required fields, inputs, extraState)\n"
+        "- 'blawx-json'    — JSON block shape and key constraints\n"
+        "- 'valid-blawx-json' — validated payload examples\n"
+        "- 'encoding-examples' — end-to-end encoding examples\n"
+        "- 'encoding-process' — recommended authoring workflow\n"
+        "Fix the issues described in 'body' above, then retry."
+    )
+    return result
+
+
 async def _get_json_or_text(resp: httpx.Response) -> Any:
     content_type = resp.headers.get("content-type", "")
     if "application/json" in content_type.lower():
@@ -651,13 +674,13 @@ async def blawx_fact_scenario_create(payload: FactScenarioPayload) -> dict[str, 
         base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
     )
     url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/facts/"
-    return await _request_json(
+    return _annotate_blawx_json_error(await _request_json(
         method="POST",
         url=url,
         api_key=settings.api_key,
         json_body=payload.model_dump(),
         timeout_seconds=30.0,
-    )
+    ))
 
 
 @mcp.tool()
@@ -686,13 +709,13 @@ async def blawx_fact_scenario_update(
         base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
     )
     url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/facts/{fact_scenario_id}/"
-    return await _request_json(
+    return _annotate_blawx_json_error(await _request_json(
         method="PUT",
         url=url,
         api_key=settings.api_key,
         json_body=payload.model_dump(),
         timeout_seconds=30.0,
-    )
+    ))
 
 
 @mcp.tool()
@@ -770,13 +793,13 @@ async def blawx_question_create(payload: QuestionPayload) -> dict[str, Any]:
         base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
     )
     url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/questions/"
-    return await _request_json(
+    return _annotate_blawx_json_error(await _request_json(
         method="POST",
         url=url,
         api_key=settings.api_key,
         json_body=payload.model_dump(),
         timeout_seconds=30.0,
-    )
+    ))
 
 
 @mcp.tool()
@@ -792,13 +815,13 @@ async def blawx_question_update(question_id: int, payload: QuestionPayload) -> d
         base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
     )
     url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/questions/{question_id}/"
-    return await _request_json(
+    return _annotate_blawx_json_error(await _request_json(
         method="PUT",
         url=url,
         api_key=settings.api_key,
         json_body=payload.model_dump(),
         timeout_seconds=30.0,
-    )
+    ))
 
 
 @mcp.tool()
@@ -1263,13 +1286,13 @@ async def blawx_encodingpart_update(
         f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
         f"/legaldocs/{legal_doc_id}/parts/{legal_doc_part_id}/encoding/"
     )
-    return await _request_json(
+    return _annotate_blawx_json_error(await _request_json(
         method="PUT",
         url=url,
         api_key=settings.api_key,
         json_body=payload.model_dump(),
         timeout_seconds=60.0,
-    )
+    ))
 
 
 @mcp.tool()
