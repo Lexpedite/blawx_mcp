@@ -254,25 +254,64 @@ def _public_part_name(internal: str) -> str:
 
 
 def _annotate_blawx_json_error(result: dict[str, Any]) -> dict[str, Any]:
-    """If *result* is an error response from a blawx_json write tool, append
-    guidance that points the agent to the relevant guide topics.
+    """Append guidance for write responses that include validation issues.
 
-    The original ``body`` and all other keys are preserved unchanged; a
-    ``guidance`` key is added only when ``ok`` is False.
+    Guidance is added when:
+    - the write response is an error (`ok` is False),
+    - an error body indicates expected `extraState` variables, or
+    - the response body includes validation warnings (including on success).
+
+    The original response payload is preserved unchanged except for an added
+    `guidance` key when any of the above conditions is true.
     """
-    if result.get("ok"):
-        return result
-    result["guidance"] = (
-        "This error was returned by the Blawx server for a blawx_json write. "
-        "To understand and fix the problem, call `blawx_encoding_guide` with "
-        "one or more of these topics:\n"
-        "- 'blawx-blocks'  — complete block-type reference (required fields, inputs, extraState)\n"
-        "- 'blawx-json'    — JSON block shape and key constraints\n"
-        "- 'valid-blawx-json' — validated payload examples\n"
-        "- 'encoding-examples' — end-to-end encoding examples\n"
-        "- 'encoding-process' — recommended authoring workflow\n"
-        "Fix the issues described in 'body' above, then retry."
+    body = result.get("body")
+    body_dict = body if isinstance(body, dict) else {}
+    has_expected_extra_state = any(
+        key in body_dict
+        for key in (
+            "expected_extra_state",
+            "expected_extrastate",
+            "expected_extra_state_keys",
+            "expected_extrastate_keys",
+        )
     )
+    has_warnings = any(key in body_dict for key in ("warnings", "validation_warnings"))
+
+    guidance_parts: list[str] = []
+
+    if not result.get("ok"):
+        guidance_parts.append(
+            "This error was returned by the Blawx server for a blawx_json write. "
+            "To understand and fix the problem, call `blawx_encoding_guide` with "
+            "one or more of these topics:\n"
+            "- 'blawx-blocks'  - complete block-type reference (required fields, inputs, extraState)\n"
+            "- 'blawx-json'    - JSON block shape and key constraints\n"
+            "- 'valid-blawx-json' - validated payload examples\n"
+            "- 'encoding-examples' - end-to-end encoding examples\n"
+            "- 'encoding-process' - recommended authoring workflow\n"
+            "Fix the issues described in 'body' above, then retry."
+        )
+
+    if has_expected_extra_state:
+        guidance_parts.append(
+            "The response includes expected extraState variables. Add those keys "
+            "to the relevant block's extraState object exactly as provided by the "
+            "server, then retry. For required extraState patterns by block type, "
+            "use `blawx_encoding_guide` topic 'blawx-blocks'."
+        )
+
+    if has_warnings:
+        guidance_parts.append(
+            "The response includes validation warnings. In particular, warnings "
+            "about missing 'next' blocks indicate a statement input likely expects "
+            "a chained statement block. Review statement stacking (`next`) and "
+            "conjunction patterns in `blawx_encoding_guide` topics 'blawx-json' "
+            "and 'blawx-blocks'."
+        )
+
+    if guidance_parts:
+        result["guidance"] = "\n\n".join(guidance_parts)
+
     return result
 
 
