@@ -23,7 +23,10 @@ Blocks can include: `type`, `inputs`, `fields`, `extraState`, and (for statement
 
 - No disjunction operator: represent disjunctions as multiple rules with the same conclusion.
 - Variable names must be capitalized (e.g., `A`).
-- Object names must be lowercase atoms (e.g., `john_doe`).
+- Object names must be lowercase atoms (e.g., `john_doe`, `contract_main`).
+- Do not end an object symbol with an underscore followed by digits, such as `contract_1`; that suffix is reserved by Blawx.
+- `doc_selector` requires `extraState.section_reference` in addition to `fields.doc_part_name`.
+- `object_category` uses `fields.category_name` plus `inputs.object`.
 - Prefer category-membership tests early in rule conditions when possible.
 - Prefer brief but semantically meaningful variable names ("Person" over "X")
 

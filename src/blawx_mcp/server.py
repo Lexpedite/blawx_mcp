@@ -475,7 +475,19 @@ async def blawx_ontology_categories_list() -> dict[str, Any]:
 async def blawx_ontology_category_create(payload: dict[str, Any]) -> dict[str, Any]:
     """Create a new ontology category.
 
-    The request schema depends on the server; pass the JSON body as a dict.
+        Pass the ontology category JSON body as `payload`.
+
+        Current API validation requires `name` and `slug`.
+        Common payload shape:
+        {
+            "name": "Contract",
+            "slug": "contract",
+            "short_description": "",
+            "nlg_prefix": "",
+            "nlg_postfix": "is a contract"
+        }
+
+        `nlg_postfix` is currently limited to 50 characters by the Blawx API.
     """
 
     settings = get_settings()
@@ -566,7 +578,19 @@ async def blawx_ontology_relationships_list() -> dict[str, Any]:
 
 @mcp.tool()
 async def blawx_ontology_relationship_create(payload: dict[str, Any]) -> dict[str, Any]:
-    """Create a new ontology relationship."""
+    """Create a new ontology relationship.
+
+    Pass the ontology relationship JSON body as `payload`.
+
+    Current API validation requires `name` and `slug`.
+    Common payload shape:
+    {
+      "name": "Estimated Expenditure",
+      "slug": "estimated_expenditure",
+      "short_description": "",
+      "nlg_prefix": ""
+    }
+    """
 
     settings = get_settings()
     team_id = await _resolve_team_id(
@@ -635,7 +659,20 @@ async def blawx_ontology_relationship_parameters_list(relationship_id: int) -> d
 
 @mcp.tool()
 async def blawx_ontology_relationship_parameter_create(relationship_id: int, payload: dict[str, Any]) -> dict[str, Any]:
-    """Create a new relationship parameter definition."""
+    """Create a new relationship parameter definition.
+
+    Pass the relationship-parameter JSON body as `payload`.
+
+    Current API validation requires `order` and `type_id`.
+    Common payload shape:
+    {
+      "order": 1,
+      "type_id": 466,
+      "nlg_postfix": ""
+    }
+
+    `type_id` must be the id of an ontology category.
+    """
 
     settings = get_settings()
     team_id = await _resolve_team_id(
@@ -904,6 +941,8 @@ async def blawx_question_ask_with_fact_scenario(question_id: int, fact_scenario_
         and `note` describing what was expected.
 
         Notes:
+            - In the current Blawx app, this route works only with shared questions.
+                Non-shared questions may return `Question not available via API.`
             - The returned results are temporary. When available, `ttl_seconds` indicates how long
                 the cached response is expected to remain available.
             - If follow-up retrieval tools return `status_code` 410 (expired / not found), re-run
@@ -995,7 +1034,7 @@ async def blawx_question_ask_with_facts(question_id: int, facts: AskFactsPayload
 
     1. OBJECTS (for non-datatype categories):
         - Must be declared in category facts before being used in relationships
-        - Object names must be lowercase strings without spaces (e.g., "john_doe", "contract_123", "department_of_defence")
+        - Object names must be lowercase strings without spaces (e.g., "john_doe", "contract_main", "department_of_defence")
         - Convert user's natural language to valid atoms by replacing spaces with underscores
         - Use only lowercase letters, numbers, and underscores
         - Do not end a symbol with an underscore followed by numbers, as that is a reserved format.

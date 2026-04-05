@@ -25,3 +25,64 @@ objects.
 - for categories, the object is the only parameter, and postfix appears after it.
 - Example: "employee(X)" -> prefix "", postfix "is an employee"
 - Example: "works_for(X,Y)" -> prefix "", postfix1 "works for", postfix2 ""
+
+## MCP ontology write payloads
+
+The ontology write tools do not accept `blawx_json` workspaces. They accept
+plain JSON objects as `payload`.
+
+### Category create/update
+
+Current API validation requires `name` and `slug`.
+
+Common payload shape:
+
+```json
+{
+	"name": "Contract",
+	"slug": "contract",
+	"short_description": "",
+	"nlg_prefix": "",
+	"nlg_postfix": "is a contract"
+}
+```
+
+Notes:
+
+- `nlg_postfix` is limited to 50 characters by the current API.
+- Category read responses may also include `long_description`.
+
+### Relationship create/update
+
+Current API validation requires `name` and `slug`.
+
+Common payload shape:
+
+```json
+{
+	"name": "Estimated Expenditure",
+	"slug": "estimated_expenditure",
+	"short_description": "",
+	"nlg_prefix": ""
+}
+```
+
+### Relationship parameter create/update
+
+Current API validation requires `order` and `type_id`.
+
+Common payload shape:
+
+```json
+{
+	"order": 1,
+	"type_id": 466,
+	"nlg_postfix": ""
+}
+```
+
+Notes:
+
+- `type_id` must be the id of an ontology category.
+- Use `blawx_ontology_categories_list` or `blawx_ontology_category_detail` to find valid category ids.
+- `blawx_ontology_relationship_parameters_list` shows the `type_slug` currently associated with each parameter.

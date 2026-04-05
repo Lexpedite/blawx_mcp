@@ -42,7 +42,7 @@ If a block has no named args, required components are shown as `none`.
 
 ## Document Selector and reference blocks
 
-- `doc_selector`: fields `doc_part_name`
+- `doc_selector`: fields `doc_part_name`; extraState `section_reference`
 - `holds`: inputs `section`, `statement`
 
 ---
@@ -53,9 +53,14 @@ If a block has no named args, required components are shown as `none`.
 - `object_selector`: fields `object_name`
 - `object_declaration`: fields `prefix`, `object_name`, `postfix`; extraState `category_name`
 - `new_object_category`: fields `category_name`; inputs `object`
-- `object_category`: inputs `object`, `category`
+- `object_category`: fields `category_name`; inputs `object`
 - `object_equality`: inputs `first_object`, `second_object`
 - `object_disequality`: inputs `first_object`, `second_object`
+
+Notes:
+
+- `object_declaration.fields.object_name` should be a lowercase atom.
+- Do not end an object symbol with an underscore followed by digits, such as `contract_1`; that suffix is reserved by Blawx.
 
 ---
 

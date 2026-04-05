@@ -33,6 +33,9 @@ And for non-empty workspaces (`blawx_json != {}`), it must satisfy:
 - block types are known/supported
 - ontology/object references are valid for the target project
 - block types forbidden for encoding parts are not used
+- `doc_selector` blocks require `extraState.section_reference`
+- `object_category` blocks use `fields.category_name` and `inputs.object`
+- declared object names should not end in an underscore followed by digits, such as `contract_1`
 
 In MCP usage, this object is provided as the `payload` argument to
 `blawx_encodingpart_update`.
