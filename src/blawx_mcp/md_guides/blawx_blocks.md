@@ -5,6 +5,7 @@
 For block instances in `blawx_json`:
 - named `field_*` args become required entries in `fields.<name>`
 - named `input_*` args become required entries in `inputs.<name>`
+- when an input expects a numeric value, provide a `number_value` block in that input socket rather than a raw number in `fields`
 - some blocks also require `extraState` keys (notably ontology/relationship blocks)
 
 If a block has no named args, required components are shown as `none`.
@@ -20,7 +21,7 @@ If a block has no named args, required components are shown as `none`.
 - `conjunction`: inputs `conjoined_statements`
 - `logical_negation`: inputs `negated_statement`
 - `default_negation`: inputs `default_negated_statement`
-- `comparison`: fields `operator`; inputs `first_comparator`, `second_comparator`
+- `comparison`: fields `operator` (dropdown/raw value: `eq`, `neq`, `lt`, `gt`, `gte`, `lte`); inputs `first_comparator`, `second_comparator`
 - `fact`: inputs `source`, `statements`
 - `query`: inputs `query`
 - `rule`: inputs `source`, `conditions`, `conclusion`
@@ -88,7 +89,7 @@ If a block has no named args, required components are shown as `none`.
 
 - `calculation`: inputs `variable`, `calculation`
 - `math_operation`: fields `operator`; inputs `left_side`, `right_side`
-- `numerical_constraint`: fields `operator`; inputs `first_comparator`, `second_comparator`
+- `numerical_constraint`: fields `operator` (dropdown/raw value: `eq`, `neq`, `lt`, `gt`, `gte`, `lte`); inputs `first_comparator`, `second_comparator`
 - `date_comparison`: fields `comparison`; inputs `first_date`, `second_date`
 - `date_element`: fields `element`; inputs `date`
 - `date_calculate`: inputs `year`, `month`, `day`

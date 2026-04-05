@@ -200,6 +200,24 @@ def _extract_cache_key(body: Any) -> str:
     raise RuntimeError("Response did not include a cache_key")
 
 
+def _unexpected_response_result(
+    resp: dict[str, Any],
+    *,
+    error: str,
+    note: str,
+    **extra: Any,
+) -> dict[str, Any]:
+    result = {
+        "ok": resp["ok"],
+        "status_code": resp["status_code"],
+        "error": error,
+        "note": note,
+        "body": resp.get("body"),
+    }
+    result.update(extra)
+    return result
+
+
 def _extract_optional_int(body: Any, key: str) -> int | None:
     if isinstance(body, dict):
         value = body.get(key)
@@ -881,6 +899,10 @@ async def blawx_question_ask_with_fact_scenario(question_id: int, fact_scenario_
 
         Returns a cache key for later retrieval.
 
+        If the Blawx server returns an unexpected response shape instead of a cached-response
+        payload, this tool returns the raw server response in `body` together with an `error`
+        and `note` describing what was expected.
+
         Notes:
             - The returned results are temporary. When available, `ttl_seconds` indicates how long
                 the cached response is expected to remain available.
@@ -903,11 +925,23 @@ async def blawx_question_ask_with_fact_scenario(question_id: int, fact_scenario_
     )
 
     body = resp.get("body")
-    cache_key = _extract_cache_key(body)
+    try:
+        cache_key = _extract_cache_key(body)
+    except RuntimeError:
+        return _unexpected_response_result(
+            resp,
+            error="Expected cached ask response including cache_key, but Blawx returned a different response.",
+            note=(
+                "The raw Blawx response is preserved in `body`. This usually means the ask endpoint "
+                "returned an error payload, a non-cached response, or a response schema this MCP server "
+                "does not recognize."
+            ),
+        )
     return {
         "ok": resp["ok"],
         "status_code": resp["status_code"],
         "cache_key": cache_key,
+        "body": body,
         "ttl_seconds": _extract_optional_int(body, "ttl_seconds"),
         "created_at": _extract_optional_str(body, "created_at"),
         "answer_count": _extract_optional_int(body, "answer_count"),
@@ -919,6 +953,10 @@ async def blawx_question_ask_with_facts(question_id: int, facts: AskFactsPayload
     """Ask a question using a structured facts payload.
 
         Returns a cache key for later retrieval.
+
+        If the Blawx server returns an unexpected response shape instead of a cached-response
+        payload, this tool returns the raw server response in `body` together with an `error`
+        and `note` describing what was expected.
 
         Notes:
             - The returned results are temporary. When available, `ttl_seconds` indicates how long
@@ -992,11 +1030,23 @@ async def blawx_question_ask_with_facts(question_id: int, facts: AskFactsPayload
     )
 
     body = resp.get("body")
-    cache_key = _extract_cache_key(body)
+    try:
+        cache_key = _extract_cache_key(body)
+    except RuntimeError:
+        return _unexpected_response_result(
+            resp,
+            error="Expected cached ask response including cache_key, but Blawx returned a different response.",
+            note=(
+                "The raw Blawx response is preserved in `body`. This usually means the ask endpoint "
+                "returned an error payload, a non-cached response, or a response schema this MCP server "
+                "does not recognize."
+            ),
+        )
     return {
         "ok": resp["ok"],
         "status_code": resp["status_code"],
         "cache_key": cache_key,
+        "body": body,
         "ttl_seconds": _extract_optional_int(body, "ttl_seconds"),
         "created_at": _extract_optional_str(body, "created_at"),
         "answer_count": _extract_optional_int(body, "answer_count"),
@@ -1010,6 +1060,9 @@ async def blawx_list_answers(question_id: int, cache_key: str) -> dict[str, Any]
         Returns:
             - total: total number of answers
             - answers: list of {answer_index, bindings, explanation_count}
+
+        If the Blawx server returns an unexpected response shape, the raw server response is
+        preserved in `body` and any returned `answers` are only best-effort inferred values.
 
         If `status_code` is 410, the cache key has expired and you must re-run an ask tool.
     """
@@ -1056,13 +1109,13 @@ async def blawx_list_answers(question_id: int, cache_key: str) -> dict[str, Any]
     # Fallback for unexpected shapes.
     indices = _extract_index_list(body, preferred_keys=("answers", "Answers"))
     answer_indices = indices or []
-    return {
-        "ok": resp["ok"],
-        "status_code": resp["status_code"],
-        "total": len(answer_indices),
-        "answers": [{"answer_index": i, "bindings": "", "explanation_count": 0} for i in answer_indices],
-        "note": "Unexpected response shape; returned inferred indices only",
-    }
+    return _unexpected_response_result(
+        resp,
+        error="Expected answer list response, but Blawx returned a different response shape.",
+        note="The raw Blawx response is preserved in `body`. Any returned `answers` values were inferred heuristically.",
+        total=len(answer_indices),
+        answers=[{"answer_index": i, "bindings": "", "explanation_count": 0} for i in answer_indices],
+    )
 
 
 @mcp.tool()
@@ -1088,6 +1141,9 @@ async def blawx_list_explanations(question_id: int, cache_key: str, answer_index
             - answer_index
             - bindings
             - explanations: list of {explanation_index, parts_available}
+
+        If the Blawx server returns an unexpected response shape, the raw server response is
+        preserved in `body` and any returned `explanations` are only best-effort inferred values.
 
         Important:
             - The explanation text can include variables whose meaning depends on constraints.
@@ -1148,14 +1204,14 @@ async def blawx_list_explanations(question_id: int, cache_key: str, answer_index
         preferred_keys=("explanations", "Explanations", "explanation", "Explanation"),
     )
     explanation_indices = indices or []
-    return {
-        "ok": resp["ok"],
-        "status_code": resp["status_code"],
-        "answer_index": answer_index,
-        "bindings": "",
-        "explanations": [{"explanation_index": i, "parts_available": []} for i in explanation_indices],
-        "note": "Unexpected response shape; returned inferred indices only",
-    }
+    return _unexpected_response_result(
+        resp,
+        error="Expected explanation list response, but Blawx returned a different response shape.",
+        note="The raw Blawx response is preserved in `body`. Any returned `explanations` values were inferred heuristically.",
+        answer_index=answer_index,
+        bindings="",
+        explanations=[{"explanation_index": i, "parts_available": []} for i in explanation_indices],
+    )
 
 
 @mcp.tool()
@@ -1397,17 +1453,17 @@ async def _get_part(
         }
 
     # Fallback for non-JSON or unexpected responses.
-    return {
-        "ok": resp["ok"],
-        "status_code": resp["status_code"],
-        "part": _public_part_name(part_name),
-        "type": None,
-        "start": start,
-        "end": end,
-        "total": None,
-        "data": body,
-        "note": "Unexpected response shape; returned body as data",
-    }
+    return _unexpected_response_result(
+        resp,
+        error=f"Expected explanation part response for {part_name}, but Blawx returned a different response shape.",
+        note="The raw Blawx response is preserved in `body`. `data` mirrors that body for compatibility with existing callers.",
+        part=_public_part_name(part_name),
+        type=None,
+        start=start,
+        end=end,
+        total=None,
+        data=body,
+    )
 
 
 @mcp.tool()
@@ -1423,6 +1479,9 @@ async def blawx_get_model_part(
 
     Uses optional 1-based inclusive line slicing via start/end.
     Returns an object with fields: part, type, start, end, total, data.
+
+    If the Blawx server returns an unexpected response shape, the raw server response is
+    preserved in `body` and mirrored in `data` for compatibility.
 
     If `status_code` is 410, the cache key has expired and you must re-run an ask tool.
     """
@@ -1452,6 +1511,9 @@ async def blawx_get_attributes_part(
     Uses optional 1-based inclusive line slicing via start/end.
     Returns an object with fields: part, type, start, end, total, data.
 
+    If the Blawx server returns an unexpected response shape, the raw server response is
+    preserved in `body` and mirrored in `data` for compatibility.
+
     If `status_code` is 410, the cache key has expired and you must re-run an ask tool.
     """
 
@@ -1479,6 +1541,9 @@ async def blawx_get_explanation_part(
 
     Uses optional 1-based inclusive line slicing via start/end.
     Returns an object with fields: part, type, start, end, total, data.
+
+    If the Blawx server returns an unexpected response shape, the raw server response is
+    preserved in `body` and mirrored in `data` for compatibility.
 
         Important:
             - Always review the attributes part for the same explanation. The explanation text can
@@ -1516,6 +1581,9 @@ async def blawx_get_constraint_satisfaction_part(
 
     Uses optional 1-based inclusive line slicing via start/end.
     Returns an object with fields: part, type, start, end, total, data.
+
+    If the Blawx server returns an unexpected response shape, the raw server response is
+    preserved in `body` and mirrored in `data` for compatibility.
 
     If `status_code` is 410, the cache key has expired and you must re-run an ask tool.
     """
