@@ -998,6 +998,8 @@ async def blawx_question_ask_with_facts(question_id: int, facts: AskFactsPayload
         and `note` describing what was expected.
 
         Notes:
+            - In the current Blawx app, this route also works only with shared questions.
+                Non-shared questions may return `Question not available via API.`
             - The returned results are temporary. When available, `ttl_seconds` indicates how long
                 the cached response is expected to remain available.
             - If follow-up retrieval tools return `status_code` 410 (expired / not found), re-run

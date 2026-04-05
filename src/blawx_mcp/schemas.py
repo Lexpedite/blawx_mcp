@@ -68,7 +68,8 @@ class QuestionPayload(NamedWorkspacePayload):
         description=(
             "Whether this question is shared. Shared questions are discoverable via "
             "shared-question read endpoints and are required for "
-            "`blawx_question_ask_with_fact_scenario` in the current Blawx app."
+            "`blawx_question_ask_with_fact_scenario` and "
+            "`blawx_question_ask_with_facts` in the current Blawx app."
         ),
     )
 
