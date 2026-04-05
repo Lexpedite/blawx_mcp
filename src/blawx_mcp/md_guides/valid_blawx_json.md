@@ -34,6 +34,7 @@ And for non-empty workspaces (`blawx_json != {}`), it must satisfy:
 - ontology/object references are valid for the target project
 - block types forbidden for encoding parts are not used
 - `doc_selector` blocks require `extraState.section_reference`
+- use `object_declaration` to create new objects and supply `extraState.category_name`
 - `object_category` blocks use `fields.category_name` and `inputs.object`
 - declared object names should not end in an underscore followed by digits, such as `contract_1`
 
