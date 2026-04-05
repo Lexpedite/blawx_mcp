@@ -34,7 +34,6 @@ If a block has no named args, required components are shown as `none`.
 - `opposes`: inputs `first_statement`, `second_statement`
 - `defeated`: inputs `defeating_rule`, `defeating_statement`
 - `applies`: inputs `applicable_rule`, `object`
-- `attributed_fact`: fields `exceptions`; inputs `source`, `statement`
 - `attributed_rule`: fields `defeasible`, `inapplicable`; inputs `conditions`, `source`, `conclusion`
 
 
