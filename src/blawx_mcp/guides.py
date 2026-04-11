@@ -15,6 +15,7 @@ def _read_md_guide(filename: str) -> str:
    except FileNotFoundError:
       return f"# Missing guide\n\nCould not find `{filename}` in `md_guides`."
 
+
 SCA_SP_GUIDE_MD = _read_md_guide("scasp.md")
 ONTOLOGY_GUIDE_MD = _read_md_guide("ontology.md")
 BLAWX_JSON_GUIDE_MD = _read_md_guide("blawx_json.md")

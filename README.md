@@ -184,7 +184,7 @@ and to give it hints on how to do better.
 When you pose a question, the answer is saved on the Blawx
 server for approximately 30 minutes, and your agent can
 review it over that period of time. Once the data expires,
-your agent will need to pose the qestion again to analyse
+your agent will need to pose the question again to analyse
 the responses further. Based on the instructions provided
 by the MCP server, it should know to do that when and if
 required.
@@ -259,7 +259,7 @@ The API supports read-write legal documents and parts; for now this MCP server e
 
 `blawx_encodingpart_update` accepts only **Blawx JSON blocks** via `payload.blawx_json`. Do not send `content`, `scasp_encoding`, or stringified JSON.
 
-**NB**: The other three parts should be read alongisde the
+**NB**: The other three parts should be read alongside the
 attributes, or relevant information may be missing. This
 instruction is provided to the agent, but if it isn't followed
 your agent may draw incorrect conclusions. It may be wise to

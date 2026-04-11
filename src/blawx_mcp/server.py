@@ -746,7 +746,7 @@ async def blawx_ontology_relationship_parameter_delete(relationship_id: int, par
 
 @mcp.tool()
 async def blawx_fact_scenarios_list() -> dict[str, Any]:
-    """List available fact scenarios for use in the blawx_ask_question_with_fact_scenario tool.
+    """List available fact scenarios for use in the blawx_question_ask_with_fact_scenario tool.
     """
     settings = get_settings()
     team_id = await _resolve_team_id(
