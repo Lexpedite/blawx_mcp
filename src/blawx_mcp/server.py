@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import asyncio
 import logging
 import os
@@ -1640,9 +1641,29 @@ async def blawx_get_constraint_satisfaction_part(
     )
 
 
-def main() -> None:
-    # SSE transport runs an HTTP server (uvicorn). We log a small banner so it's
-    # obvious the server is up.
+def _build_arg_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Run the Blawx MCP server.")
+    parser.add_argument(
+        "--stdio",
+        action="store_true",
+        help="Run over stdio instead of SSE/HTTP.",
+    )
+    return parser
+
+
+def _log_loaded_tools(logger: logging.Logger) -> None:
+    logger.info(
+        "Loaded tools: health, ontology (read + read-write CRUD), facts (read + CRUD), "
+        "questions (read shared + CRUD), ask/answers/explanations, legaldocs (read), encoding (read-write)"
+    )
+    logger.info(
+        "Config via env: BLAWX_BASE_URL (default https://app.blawx.dev), BLAWX_API_KEY, BLAWX_TEAM_SLUG, BLAWX_PROJECT_ID"
+    )
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = _build_arg_parser().parse_args(argv)
+
     log_level = os.environ.get("BLAWX_MCP_LOG_LEVEL", "INFO").upper()
     logging.basicConfig(
         level=getattr(logging, log_level, logging.INFO),
@@ -1651,15 +1672,18 @@ def main() -> None:
     )
 
     logger = logging.getLogger("blawx_mcp")
+
+    if args.stdio:
+        logger.info("Starting blawx-mcp MCP server (stdio)")
+        _log_loaded_tools(logger)
+        asyncio.run(mcp.run_stdio_async())
+        return
+
+    # SSE transport runs an HTTP server (uvicorn). We log a small banner so it's
+    # obvious the server is up.
     logger.info("Starting blawx-mcp MCP server (SSE)")
     logger.info("Listening on http://%s:%s/sse", mcp.settings.host, mcp.settings.port)
-    logger.info(
-        "Loaded tools: health, ontology (read + read-write CRUD), facts (read + CRUD), "
-        "questions (read shared + CRUD), ask/answers/explanations, legaldocs (read), encoding (read-write)"
-    )
-    logger.info(
-        "Config via env: BLAWX_BASE_URL (default https://app.blawx.dev), BLAWX_API_KEY, BLAWX_TEAM_SLUG, BLAWX_PROJECT_ID"
-    )
+    _log_loaded_tools(logger)
     logger.info(
         "Server bind via env: BLAWX_MCP_HOST (default 127.0.0.1), BLAWX_MCP_PORT (default 8765)"
     )

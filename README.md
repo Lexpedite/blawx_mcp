@@ -1,6 +1,6 @@
 # blawx-mcp
 
-A minimal run-local MCP server (SSE over HTTP) that calls the Blawx API using a Blawx API key.
+A minimal run-local MCP server that calls the Blawx API using a Blawx API key.
 
 ## Prereqs
 
@@ -37,7 +37,9 @@ environment settings.
 
 ## Run
 
-Run the MCP server from this folder (no install required):
+Run the MCP server from this folder (no install required).
+
+For SSE/HTTP transport:
 
 ```bash
 ./.venv/bin/python -m blawx_mcp
@@ -53,6 +55,12 @@ Optional server bind overrides:
 ```bash
 export BLAWX_MCP_HOST="127.0.0.1"
 export BLAWX_MCP_PORT="8765"
+```
+
+For stdio transport, which is useful for local clients such as Claude Desktop:
+
+```bash
+./.venv/bin/python -m blawx_mcp --stdio
 ```
 
 ## Connect to Your Coding Agent

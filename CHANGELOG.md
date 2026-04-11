@@ -7,6 +7,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [0.2.0] - 2026-04-11
 
 ### Added
+- Added a `--stdio` CLI flag so `blawx_mcp` can run as a local stdio MCP server for clients such as Claude Desktop.
 - Added ontology management tools for categories, relationships, and relationship parameters, including create, update, delete, list, and detail operations.
 - Added question and fact-scenario management tools for create, update, delete, and full-project listing workflows.
 - Added legal-document navigation and encoding-part tools, including guidance for reading legislation text and updating encodings.
