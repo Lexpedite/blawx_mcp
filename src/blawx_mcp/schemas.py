@@ -18,10 +18,60 @@ These models are used to:
 from __future__ import annotations
 
 import json
-from typing import List, Optional, Union
+from typing import Any, List, Optional, Union
 from typing_extensions import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel
+
+
+class BlawxWorkspacePayload(BaseModel):
+    """Shared payload shape for Blawx Blockly workspace writes.
+
+    The payload must include only `blawx_json`.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    blawx_json: dict[str, Any] = Field(
+        ...,
+        description="Blawx visual blocks JSON for the encoding part.",
+    )
+
+
+class EncodingPartUpdatePayload(BlawxWorkspacePayload):
+    """Payload for encoding part writes."""
+
+
+class NamedWorkspacePayload(BlawxWorkspacePayload):
+    """Shared payload for named workspace resources.
+
+    Questions and fact scenarios require `name` and `slug` in addition to
+    `blawx_json`.
+    """
+
+    name: str = Field(..., description="Human-readable name for the resource.")
+    slug: str = Field(..., description="URL-safe slug for the resource.")
+
+
+class FactScenarioPayload(NamedWorkspacePayload):
+    """Payload for fact scenario create/update writes."""
+
+
+class QuestionPayload(NamedWorkspacePayload):
+    """Payload for question create/update writes.
+
+    Expected convention: include a single outer question block in `blawx_json`.
+    """
+
+    shared: Optional[bool] = Field(
+        None,
+        description=(
+            "Whether this question is shared. Shared questions are discoverable via "
+            "shared-question read endpoints and are required for "
+            "`blawx_question_ask_with_fact_scenario` and "
+            "`blawx_question_ask_with_facts` in the current Blawx app."
+        ),
+    )
 
 
 class VariableRef(BaseModel):

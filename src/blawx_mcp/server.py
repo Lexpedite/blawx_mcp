@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import asyncio
 import logging
 import os
@@ -11,7 +12,22 @@ import httpx
 from mcp.server.fastmcp import FastMCP
 
 from .config import get_settings
-from .schemas import AskFactsPayload
+from .guides import (
+    BLAWX_BLOCKS_GUIDE_MD,
+    BLAWX_JSON_GUIDE_MD,
+    ENCODING_EXAMPLES_GUIDE_MD,
+    ENCODING_PROCESS_GUIDE_MD,
+    ENCODINGPART_GUIDE_MD,
+    ONTOLOGY_GUIDE_MD,
+    SCA_SP_GUIDE_MD,
+    VALID_BLAWX_JSON_GUIDE_MD,
+)
+from .schemas import (
+    AskFactsPayload,
+    EncodingPartUpdatePayload,
+    FactScenarioPayload,
+    QuestionPayload,
+)
 
 _TEAM_ID_CACHE: dict[str, int] = {}
 
@@ -41,6 +57,97 @@ mcp = FastMCP(
     port=_port,
     log_level=_log_level if _log_level else "INFO",
 )
+
+
+@mcp.tool()
+async def blawx_encoding_guide(topic: str = "quickstart") -> dict[str, Any]:
+    """Read this first before editing encoding parts.
+
+    Use this tool before `blawx_encodingpart_update` to learn:
+    - primary end-to-end workflow (`encoding-process`)
+    - required request shape (`blawx_json` key only)
+    - Blawx JSON formatting expectations
+    - supporting reference guides
+
+    Topics: quickstart | blawx-json | valid-blawx-json | blawx-blocks | encodingpart | encoding-process | encoding-examples | ontology | scasp | all
+    """
+
+    available_topics = [
+        "quickstart",
+        "blawx-json",
+        "valid-blawx-json",
+        "blawx-blocks",
+        "encodingpart",
+        "encoding-process",
+        "encoding-examples",
+        "ontology",
+        "scasp",
+        "all",
+    ]
+
+    normalized = topic.strip().lower()
+    guides = {
+        "scasp": SCA_SP_GUIDE_MD,
+        "ontology": ONTOLOGY_GUIDE_MD,
+        "blawx-json": BLAWX_JSON_GUIDE_MD,
+        "valid-blawx-json": VALID_BLAWX_JSON_GUIDE_MD,
+        "blawx-blocks": BLAWX_BLOCKS_GUIDE_MD,
+        "encodingpart": ENCODINGPART_GUIDE_MD,
+        "encoding-process": ENCODING_PROCESS_GUIDE_MD,
+        "encoding-examples": ENCODING_EXAMPLES_GUIDE_MD,
+    }
+
+    quickstart = (
+        "Start with `encoding-process` for the canonical workflow.\n"
+        "Then read `encodingpart` for write-tool contract details.\n"
+        "Then read `blawx-json` and `blawx-blocks` for block-shape guidance.\n"
+        "Use `valid-blawx-json` and `encoding-examples` for concrete patterns.\n"
+        "Use `blawx_encodingpart_get` to inspect current encoding first.\n"
+        "When writing, call `blawx_encodingpart_update` with only this shape:\n"
+        "`{\"blawx_json\": <json object>}`\n"
+        "Do not send `content`, `scasp_encoding`, or stringified JSON.\n"
+        "If ontology terms are unclear, read `ontology` before writing blocks."
+    )
+
+    if normalized == "quickstart":
+        selected = quickstart
+    elif normalized == "all":
+        selected = (
+            "# Quickstart\n"
+            f"{quickstart}\n\n"
+            "# EncodingPart Workflow\n"
+            f"{ENCODINGPART_GUIDE_MD}\n\n"
+            "# Encoding Process\n"
+            f"{ENCODING_PROCESS_GUIDE_MD}\n\n"
+            "# Blawx JSON Blocks\n"
+            f"{BLAWX_JSON_GUIDE_MD}\n\n"
+            "# Valid Blawx JSON Examples\n"
+            f"{VALID_BLAWX_JSON_GUIDE_MD}\n\n"
+            "# Blawx Blocks Reference\n"
+            f"{BLAWX_BLOCKS_GUIDE_MD}\n\n"
+            "# Ontology\n"
+            f"{ONTOLOGY_GUIDE_MD}\n\n"
+            "# Encoding Examples\n"
+            f"{ENCODING_EXAMPLES_GUIDE_MD}\n\n"
+            "# s(CASP)\n"
+            f"{SCA_SP_GUIDE_MD}"
+        )
+    elif normalized in guides:
+        selected = guides[normalized]
+    else:
+        return {
+            "ok": False,
+            "error": "Unknown topic",
+            "requested_topic": topic,
+            "available_topics": available_topics,
+        }
+
+    return {
+        "ok": True,
+        "topic": normalized,
+        "guidance_markdown": selected,
+        "available_topics": available_topics,
+    }
 
 
 async def _request_body(
@@ -94,6 +201,24 @@ def _extract_cache_key(body: Any) -> str:
     raise RuntimeError("Response did not include a cache_key")
 
 
+def _unexpected_response_result(
+    resp: dict[str, Any],
+    *,
+    error: str,
+    note: str,
+    **extra: Any,
+) -> dict[str, Any]:
+    result = {
+        "ok": resp["ok"],
+        "status_code": resp["status_code"],
+        "error": error,
+        "note": note,
+        "body": resp.get("body"),
+    }
+    result.update(extra)
+    return result
+
+
 def _extract_optional_int(body: Any, key: str) -> int | None:
     if isinstance(body, dict):
         value = body.get(key)
@@ -145,6 +270,68 @@ _PART_INTERNAL_TO_PUBLIC: dict[str, str] = {
 
 def _public_part_name(internal: str) -> str:
     return _PART_INTERNAL_TO_PUBLIC.get(internal, internal)
+
+
+def _annotate_blawx_json_error(result: dict[str, Any]) -> dict[str, Any]:
+    """Append guidance for write responses that include validation issues.
+
+    Guidance is added when:
+    - the write response is an error (`ok` is False),
+    - an error body indicates expected `extraState` variables, or
+    - the response body includes validation warnings (including on success).
+
+    The original response payload is preserved unchanged except for an added
+    `guidance` key when any of the above conditions is true.
+    """
+    body = result.get("body")
+    body_dict = body if isinstance(body, dict) else {}
+    has_expected_extra_state = any(
+        key in body_dict
+        for key in (
+            "expected_extra_state",
+            "expected_extrastate",
+            "expected_extra_state_keys",
+            "expected_extrastate_keys",
+        )
+    )
+    has_warnings = any(key in body_dict for key in ("warnings", "validation_warnings"))
+
+    guidance_parts: list[str] = []
+
+    if not result.get("ok"):
+        guidance_parts.append(
+            "This error was returned by the Blawx server for a blawx_json write. "
+            "To understand and fix the problem, call `blawx_encoding_guide` with "
+            "one or more of these topics:\n"
+            "- 'blawx-blocks'  - complete block-type reference (required fields, inputs, extraState)\n"
+            "- 'blawx-json'    - JSON block shape and key constraints\n"
+            "- 'valid-blawx-json' - validated payload examples\n"
+            "- 'encoding-examples' - end-to-end encoding examples\n"
+            "- 'encoding-process' - recommended authoring workflow\n"
+            "Fix the issues described in 'body' above, then retry."
+        )
+
+    if has_expected_extra_state:
+        guidance_parts.append(
+            "The response includes expected extraState variables. Add those keys "
+            "to the relevant block's extraState object exactly as provided by the "
+            "server, then retry. For required extraState patterns by block type, "
+            "use `blawx_encoding_guide` topic 'blawx-blocks'."
+        )
+
+    if has_warnings:
+        guidance_parts.append(
+            "The response includes validation warnings. In particular, warnings "
+            "about missing 'next' blocks indicate a statement input likely expects "
+            "a chained statement block. Review statement stacking (`next`) and "
+            "conjunction patterns in `blawx_encoding_guide` topics 'blawx-json' "
+            "and 'blawx-blocks'."
+        )
+
+    if guidance_parts:
+        result["guidance"] = "\n\n".join(guidance_parts)
+
+    return result
 
 
 async def _get_json_or_text(resp: httpx.Response) -> Any:
@@ -271,6 +458,90 @@ async def blawx_ontology_list() -> dict[str, Any]:
 
 
 @mcp.tool()
+async def blawx_ontology_categories_list() -> dict[str, Any]:
+    """List ontology categories.
+
+    This endpoint is read-write in the API (create/update/delete are also supported).
+    """
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/ontology/categories/"
+    return await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+
+
+@mcp.tool()
+async def blawx_ontology_category_create(payload: dict[str, Any]) -> dict[str, Any]:
+    """Create a new ontology category.
+
+        Pass the ontology category JSON body as `payload`.
+
+        Current API validation requires `name` and `slug`.
+        Common payload shape:
+        {
+            "name": "Contract",
+            "slug": "contract",
+            "short_description": "",
+            "nlg_prefix": "",
+            "nlg_postfix": "is a contract"
+        }
+
+        `nlg_postfix` is currently limited to 50 characters by the Blawx API.
+    """
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/ontology/categories/"
+    return await _request_json(
+        method="POST",
+        url=url,
+        api_key=settings.api_key,
+        json_body=payload,
+        timeout_seconds=30.0,
+    )
+
+
+@mcp.tool()
+async def blawx_ontology_category_update(category_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+    """Replace an ontology category (PUT)."""
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = (
+        f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
+        f"/ontology/categories/{category_id}/"
+    )
+    return await _request_json(
+        method="PUT",
+        url=url,
+        api_key=settings.api_key,
+        json_body=payload,
+        timeout_seconds=30.0,
+    )
+
+
+@mcp.tool()
+async def blawx_ontology_category_delete(category_id: int) -> dict[str, Any]:
+    """Delete an ontology category."""
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = (
+        f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
+        f"/ontology/categories/{category_id}/"
+    )
+    return await _request_json(method="DELETE", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+
+
+@mcp.tool()
 async def blawx_ontology_category_detail(category_id: int) -> dict[str, Any]:
     """Get category details by id obtained from blawx_ontology_list tool.
     """
@@ -295,8 +566,188 @@ async def blawx_ontology_relationship_detail(relationship_id: int) -> dict[str, 
 
 
 @mcp.tool()
+async def blawx_ontology_relationships_list() -> dict[str, Any]:
+    """List ontology relationships."""
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/ontology/relationships/"
+    return await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+
+
+@mcp.tool()
+async def blawx_ontology_relationship_create(payload: dict[str, Any]) -> dict[str, Any]:
+    """Create a new ontology relationship.
+
+    Pass the ontology relationship JSON body as `payload`.
+
+    Current API validation requires `name` and `slug`.
+    Common payload shape:
+    {
+      "name": "Estimated Expenditure",
+      "slug": "estimated_expenditure",
+      "short_description": "",
+      "nlg_prefix": ""
+    }
+    """
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/ontology/relationships/"
+    return await _request_json(
+        method="POST",
+        url=url,
+        api_key=settings.api_key,
+        json_body=payload,
+        timeout_seconds=30.0,
+    )
+
+
+@mcp.tool()
+async def blawx_ontology_relationship_update(relationship_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+    """Replace an ontology relationship (PUT)."""
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = (
+        f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
+        f"/ontology/relationships/{relationship_id}/"
+    )
+    return await _request_json(
+        method="PUT",
+        url=url,
+        api_key=settings.api_key,
+        json_body=payload,
+        timeout_seconds=30.0,
+    )
+
+
+@mcp.tool()
+async def blawx_ontology_relationship_delete(relationship_id: int) -> dict[str, Any]:
+    """Delete an ontology relationship."""
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = (
+        f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
+        f"/ontology/relationships/{relationship_id}/"
+    )
+    return await _request_json(method="DELETE", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+
+
+@mcp.tool()
+async def blawx_ontology_relationship_parameters_list(relationship_id: int) -> dict[str, Any]:
+    """List parameters for a relationship."""
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = (
+        f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
+        f"/ontology/relationships/{relationship_id}/parameters/"
+    )
+    return await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+
+
+@mcp.tool()
+async def blawx_ontology_relationship_parameter_create(relationship_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+    """Create a new relationship parameter definition.
+
+    Pass the relationship-parameter JSON body as `payload`.
+
+    Current API validation requires `order` and `type_id`.
+    Common payload shape:
+    {
+      "order": 1,
+      "type_id": 466,
+      "nlg_postfix": ""
+    }
+
+    `type_id` must be the id of an ontology category.
+    """
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = (
+        f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
+        f"/ontology/relationships/{relationship_id}/parameters/"
+    )
+    return await _request_json(
+        method="POST",
+        url=url,
+        api_key=settings.api_key,
+        json_body=payload,
+        timeout_seconds=30.0,
+    )
+
+
+@mcp.tool()
+async def blawx_ontology_relationship_parameter_update(
+    relationship_id: int, parameter_id: int, payload: dict[str, Any]
+) -> dict[str, Any]:
+    """Replace a relationship parameter definition (PUT)."""
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = (
+        f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
+        f"/ontology/relationships/{relationship_id}/parameters/{parameter_id}/"
+    )
+    return await _request_json(
+        method="PUT",
+        url=url,
+        api_key=settings.api_key,
+        json_body=payload,
+        timeout_seconds=30.0,
+    )
+
+
+@mcp.tool()
+async def blawx_ontology_relationship_parameter_detail(relationship_id: int, parameter_id: int) -> dict[str, Any]:
+    """Get a relationship parameter definition by id."""
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = (
+        f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
+        f"/ontology/relationships/{relationship_id}/parameters/{parameter_id}/"
+    )
+    return await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+
+
+@mcp.tool()
+async def blawx_ontology_relationship_parameter_delete(relationship_id: int, parameter_id: int) -> dict[str, Any]:
+    """Delete a relationship parameter definition."""
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = (
+        f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
+        f"/ontology/relationships/{relationship_id}/parameters/{parameter_id}/"
+    )
+    return await _request_json(method="DELETE", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+
+
+@mcp.tool()
 async def blawx_fact_scenarios_list() -> dict[str, Any]:
-    """List available fact scenarios for use in the blawx_ask_question_with_fact_scenario tool.
+    """List available fact scenarios for use in the blawx_question_ask_with_fact_scenario tool.
     """
     settings = get_settings()
     team_id = await _resolve_team_id(
@@ -304,6 +755,27 @@ async def blawx_fact_scenarios_list() -> dict[str, Any]:
     )
     url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/facts/"
     return await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+
+
+@mcp.tool()
+async def blawx_fact_scenario_create(payload: FactScenarioPayload) -> dict[str, Any]:
+    """Create a new fact scenario.
+
+    Uses the same workspace payload shape as `blawx_encodingpart_update`.
+    """
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/facts/"
+    return _annotate_blawx_json_error(await _request_json(
+        method="POST",
+        url=url,
+        api_key=settings.api_key,
+        json_body=payload.model_dump(),
+        timeout_seconds=30.0,
+    ))
 
 
 @mcp.tool()
@@ -319,14 +791,63 @@ async def blawx_fact_scenario_detail(fact_scenario_id: int) -> dict[str, Any]:
 
 
 @mcp.tool()
+async def blawx_fact_scenario_update(
+    fact_scenario_id: int, payload: FactScenarioPayload
+) -> dict[str, Any]:
+    """Replace a fact scenario (PUT).
+
+    Uses the same workspace payload shape as `blawx_encodingpart_update`.
+    """
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/facts/{fact_scenario_id}/"
+    return _annotate_blawx_json_error(await _request_json(
+        method="PUT",
+        url=url,
+        api_key=settings.api_key,
+        json_body=payload.model_dump(),
+        timeout_seconds=30.0,
+    ))
+
+
+@mcp.tool()
+async def blawx_fact_scenario_delete(fact_scenario_id: int) -> dict[str, Any]:
+    """Delete a fact scenario."""
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/facts/{fact_scenario_id}/"
+    return await _request_json(method="DELETE", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+
+
+@mcp.tool()
 async def blawx_questions_list() -> dict[str, Any]:
-    """List available questions.
+    """List available shared questions (read-only).
+
+    For read-write question management, use blawx_questions_list_all and related tools.
     """
     settings = get_settings()
     team_id = await _resolve_team_id(
         base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
     )
     url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/questions/shared/"
+    return await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+
+
+@mcp.tool()
+async def blawx_questions_list_all() -> dict[str, Any]:
+    """List all questions in the project (read-write collection)."""
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/questions/"
     return await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=30.0)
 
 
@@ -343,12 +864,86 @@ async def blawx_question_detail(question_id: int) -> dict[str, Any]:
 
 
 @mcp.tool()
+async def blawx_question_detail_all(question_id: int) -> dict[str, Any]:
+    """Get a question from the read-write questions endpoint by id."""
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/questions/{question_id}/"
+    return await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+
+
+@mcp.tool()
+async def blawx_question_create(payload: QuestionPayload) -> dict[str, Any]:
+    """Create a new question in the project.
+
+    Uses the same workspace payload shape as `blawx_encodingpart_update`.
+    A question encoding is expected to include one outer question block.
+    """
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/questions/"
+    return _annotate_blawx_json_error(await _request_json(
+        method="POST",
+        url=url,
+        api_key=settings.api_key,
+        json_body=payload.model_dump(),
+        timeout_seconds=30.0,
+    ))
+
+
+@mcp.tool()
+async def blawx_question_update(question_id: int, payload: QuestionPayload) -> dict[str, Any]:
+    """Replace a question (PUT).
+
+    Uses the same workspace payload shape as `blawx_encodingpart_update`.
+    A question encoding is expected to include one outer question block.
+    """
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/questions/{question_id}/"
+    return _annotate_blawx_json_error(await _request_json(
+        method="PUT",
+        url=url,
+        api_key=settings.api_key,
+        json_body=payload.model_dump(),
+        timeout_seconds=30.0,
+    ))
+
+
+@mcp.tool()
+async def blawx_question_delete(question_id: int) -> dict[str, Any]:
+    """Delete a question."""
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/questions/{question_id}/"
+    return await _request_json(method="DELETE", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+
+
+@mcp.tool()
 async def blawx_question_ask_with_fact_scenario(question_id: int, fact_scenario_id: int) -> dict[str, Any]:
     """Ask a question using a stored fact scenario.
 
         Returns a cache key for later retrieval.
 
+        If the Blawx server returns an unexpected response shape instead of a cached-response
+        payload, this tool returns the raw server response in `body` together with an `error`
+        and `note` describing what was expected.
+
         Notes:
+            - In the current Blawx app, this route works only with shared questions.
+                Non-shared questions may return `Question not available via API.`
             - The returned results are temporary. When available, `ttl_seconds` indicates how long
                 the cached response is expected to remain available.
             - If follow-up retrieval tools return `status_code` 410 (expired / not found), re-run
@@ -370,11 +965,23 @@ async def blawx_question_ask_with_fact_scenario(question_id: int, fact_scenario_
     )
 
     body = resp.get("body")
-    cache_key = _extract_cache_key(body)
+    try:
+        cache_key = _extract_cache_key(body)
+    except RuntimeError:
+        return _unexpected_response_result(
+            resp,
+            error="Expected cached ask response including cache_key, but Blawx returned a different response.",
+            note=(
+                "The raw Blawx response is preserved in `body`. This usually means the ask endpoint "
+                "returned an error payload, a non-cached response, or a response schema this MCP server "
+                "does not recognize."
+            ),
+        )
     return {
         "ok": resp["ok"],
         "status_code": resp["status_code"],
         "cache_key": cache_key,
+        "body": body,
         "ttl_seconds": _extract_optional_int(body, "ttl_seconds"),
         "created_at": _extract_optional_str(body, "created_at"),
         "answer_count": _extract_optional_int(body, "answer_count"),
@@ -387,7 +994,13 @@ async def blawx_question_ask_with_facts(question_id: int, facts: AskFactsPayload
 
         Returns a cache key for later retrieval.
 
+        If the Blawx server returns an unexpected response shape instead of a cached-response
+        payload, this tool returns the raw server response in `body` together with an `error`
+        and `note` describing what was expected.
+
         Notes:
+            - In the current Blawx app, this route also works only with shared questions.
+                Non-shared questions may return `Question not available via API.`
             - The returned results are temporary. When available, `ttl_seconds` indicates how long
                 the cached response is expected to remain available.
             - If follow-up retrieval tools return `status_code` 410 (expired / not found), re-run
@@ -424,7 +1037,7 @@ async def blawx_question_ask_with_facts(question_id: int, facts: AskFactsPayload
 
     1. OBJECTS (for non-datatype categories):
         - Must be declared in category facts before being used in relationships
-        - Object names must be lowercase strings without spaces (e.g., "john_doe", "contract_123", "department_of_defence")
+        - Object names must be lowercase strings without spaces (e.g., "john_doe", "contract_main", "department_of_defence")
         - Convert user's natural language to valid atoms by replacing spaces with underscores
         - Use only lowercase letters, numbers, and underscores
         - Do not end a symbol with an underscore followed by numbers, as that is a reserved format.
@@ -459,11 +1072,23 @@ async def blawx_question_ask_with_facts(question_id: int, facts: AskFactsPayload
     )
 
     body = resp.get("body")
-    cache_key = _extract_cache_key(body)
+    try:
+        cache_key = _extract_cache_key(body)
+    except RuntimeError:
+        return _unexpected_response_result(
+            resp,
+            error="Expected cached ask response including cache_key, but Blawx returned a different response.",
+            note=(
+                "The raw Blawx response is preserved in `body`. This usually means the ask endpoint "
+                "returned an error payload, a non-cached response, or a response schema this MCP server "
+                "does not recognize."
+            ),
+        )
     return {
         "ok": resp["ok"],
         "status_code": resp["status_code"],
         "cache_key": cache_key,
+        "body": body,
         "ttl_seconds": _extract_optional_int(body, "ttl_seconds"),
         "created_at": _extract_optional_str(body, "created_at"),
         "answer_count": _extract_optional_int(body, "answer_count"),
@@ -477,6 +1102,9 @@ async def blawx_list_answers(question_id: int, cache_key: str) -> dict[str, Any]
         Returns:
             - total: total number of answers
             - answers: list of {answer_index, bindings, explanation_count}
+
+        If the Blawx server returns an unexpected response shape, the raw server response is
+        preserved in `body` and any returned `answers` are only best-effort inferred values.
 
         If `status_code` is 410, the cache key has expired and you must re-run an ask tool.
     """
@@ -523,13 +1151,28 @@ async def blawx_list_answers(question_id: int, cache_key: str) -> dict[str, Any]
     # Fallback for unexpected shapes.
     indices = _extract_index_list(body, preferred_keys=("answers", "Answers"))
     answer_indices = indices or []
-    return {
-        "ok": resp["ok"],
-        "status_code": resp["status_code"],
-        "total": len(answer_indices),
-        "answers": [{"answer_index": i, "bindings": "", "explanation_count": 0} for i in answer_indices],
-        "note": "Unexpected response shape; returned inferred indices only",
-    }
+    return _unexpected_response_result(
+        resp,
+        error="Expected answer list response, but Blawx returned a different response shape.",
+        note="The raw Blawx response is preserved in `body`. Any returned `answers` values were inferred heuristically.",
+        total=len(answer_indices),
+        answers=[{"answer_index": i, "bindings": "", "explanation_count": 0} for i in answer_indices],
+    )
+
+
+@mcp.tool()
+async def blawx_cached_response_meta(question_id: int, cache_key: str) -> dict[str, Any]:
+    """Retrieve cached-response metadata (ttl, created time, answer count when available).
+
+    If `status_code` is 410, the cache key has expired and you must re-run an ask tool.
+    """
+
+    settings = get_settings()
+    url = (
+        f"{settings.base_url}/a/{settings.team_slug}/project/{settings.project_id}"
+        f"/questions/{question_id}/responses/{cache_key}/"
+    )
+    return await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=30.0)
 
 
 @mcp.tool()
@@ -540,6 +1183,9 @@ async def blawx_list_explanations(question_id: int, cache_key: str, answer_index
             - answer_index
             - bindings
             - explanations: list of {explanation_index, parts_available}
+
+        If the Blawx server returns an unexpected response shape, the raw server response is
+        preserved in `body` and any returned `explanations` are only best-effort inferred values.
 
         Important:
             - The explanation text can include variables whose meaning depends on constraints.
@@ -600,14 +1246,208 @@ async def blawx_list_explanations(question_id: int, cache_key: str, answer_index
         preferred_keys=("explanations", "Explanations", "explanation", "Explanation"),
     )
     explanation_indices = indices or []
+    return _unexpected_response_result(
+        resp,
+        error="Expected explanation list response, but Blawx returned a different response shape.",
+        note="The raw Blawx response is preserved in `body`. Any returned `explanations` values were inferred heuristically.",
+        answer_index=answer_index,
+        bindings="",
+        explanations=[{"explanation_index": i, "parts_available": []} for i in explanation_indices],
+    )
+
+
+@mcp.tool()
+async def blawx_get_explanation_full(
+    question_id: int,
+    cache_key: str,
+    answer_index: int,
+    explanation_index: int,
+) -> dict[str, Any]:
+    """Get the full explanation object (all parts, unsliced).
+
+    This can be large; prefer blawx_get_*_part tools when you only need one section.
+
+    If `status_code` is 410, the cache key has expired and you must re-run an ask tool.
+    """
+
+    settings = get_settings()
+    url = (
+        f"{settings.base_url}/a/{settings.team_slug}/project/{settings.project_id}"
+        f"/questions/{question_id}/responses/{cache_key}/answers/{answer_index}"
+        f"/explanations/{explanation_index}/"
+    )
+    return await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=60.0)
+
+
+@mcp.tool()
+async def blawx_legaldocs_list() -> dict[str, Any]:
+    """List legal docs in the project.
+
+    This returns document-level metadata. To read legislation text, then call:
+    1) `blawx_legaldocparts_list` for the chosen legal doc
+    2) `blawx_legaldocpart_detail` for each relevant part
+
+    Note: This MCP server currently does not expose tools to create/update/delete legaldocs.
+    """
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/legaldocs/"
+    result = await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=30.0)
     return {
-        "ok": resp["ok"],
-        "status_code": resp["status_code"],
-        "answer_index": answer_index,
-        "bindings": "",
-        "explanations": [{"explanation_index": i, "parts_available": []} for i in explanation_indices],
-        "note": "Unexpected response shape; returned inferred indices only",
+        **result,
+        "workflow_hint": (
+            "This is a document list. To read legal text, call blawx_legaldocparts_list "
+            "for a legal_doc_id, then call blawx_legaldocpart_detail for the relevant part(s)."
+        ),
+        "next_recommended_tool": "blawx_legaldocparts_list",
     }
+
+
+@mcp.tool()
+async def blawx_legaldoc_detail(legal_doc_id: int) -> dict[str, Any]:
+    """Get a legal doc by id.
+
+    This returns document-level metadata. To read the legislative text itself,
+    list parts with `blawx_legaldocparts_list` and then fetch part text with
+    `blawx_legaldocpart_detail`.
+
+    Note: This MCP server currently does not expose tools to create/update/delete legaldocs.
+    """
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}/legaldocs/{legal_doc_id}/"
+    result = await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+    return {
+        **result,
+        "workflow_hint": (
+            "This is legal-doc metadata. To read legal text, call blawx_legaldocparts_list "
+            "for this legal_doc_id, then call blawx_legaldocpart_detail for relevant part ids."
+        ),
+        "next_recommended_tool": "blawx_legaldocparts_list",
+    }
+
+
+@mcp.tool()
+async def blawx_legaldocparts_list(legal_doc_id: int) -> dict[str, Any]:
+    """List parts for a legal doc.
+
+    This list is mainly navigational metadata (part ids/titles/order). To view the
+    actual legislation text for a part, call `blawx_legaldocpart_detail` for that part id.
+
+    Note: This MCP server currently does not expose tools to create/update/delete legaldocparts.
+    """
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = (
+        f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
+        f"/legaldocs/{legal_doc_id}/parts/"
+    )
+    result = await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+    return {
+        **result,
+        "workflow_hint": (
+            "This is a parts list. To read the actual text, call blawx_legaldocpart_detail "
+            "for each relevant legal_doc_part_id."
+        ),
+        "next_recommended_tool": "blawx_legaldocpart_detail",
+    }
+
+
+@mcp.tool()
+async def blawx_legaldocpart_detail(legal_doc_id: int, legal_doc_part_id: int) -> dict[str, Any]:
+    """Get a single legal doc part by id.
+
+    Use this tool to view the actual text/content for a legal doc part.
+    """
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = (
+        f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
+        f"/legaldocs/{legal_doc_id}/parts/{legal_doc_part_id}/"
+    )
+    result = await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+    return {
+        **result,
+        "workflow_hint": "This tool returns the part detail, including the legal text/content when present.",
+    }
+
+
+@mcp.tool()
+async def blawx_encodingpart_get(legal_doc_id: int, legal_doc_part_id: int) -> dict[str, Any]:
+    """Get the encoding for a specific legal doc part.
+
+    Use `blawx_encoding_guide` first (topic: quickstart, then blawx-json/encodingpart)
+    before creating or editing encoding payloads.
+    """
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = (
+        f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
+        f"/legaldocs/{legal_doc_id}/parts/{legal_doc_part_id}/encoding/"
+    )
+    return await _request_json(method="GET", url=url, api_key=settings.api_key, timeout_seconds=30.0)
+
+
+@mcp.tool()
+async def blawx_encodingpart_update(
+    legal_doc_id: int, legal_doc_part_id: int, payload: EncodingPartUpdatePayload
+) -> dict[str, Any]:
+    """Replace the encoding for a legal doc part (PUT).
+
+    Read `blawx_encoding_guide` first. This tool accepts only this payload shape:
+    {"blawx_json": <json object>}
+
+    Do not send `content`, `scasp_encoding`, or stringified JSON.
+    """
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = (
+        f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
+        f"/legaldocs/{legal_doc_id}/parts/{legal_doc_part_id}/encoding/"
+    )
+    return _annotate_blawx_json_error(await _request_json(
+        method="PUT",
+        url=url,
+        api_key=settings.api_key,
+        json_body=payload.model_dump(),
+        timeout_seconds=60.0,
+    ))
+
+
+@mcp.tool()
+async def blawx_encodingpart_delete(legal_doc_id: int, legal_doc_part_id: int) -> dict[str, Any]:
+    """Delete the encoding for a legal doc part.
+
+    Use `blawx_encoding_guide` if you need to recreate the encoding with the correct payload shape.
+    """
+
+    settings = get_settings()
+    team_id = await _resolve_team_id(
+        base_url=settings.base_url, api_key=settings.api_key, team_slug=settings.team_slug
+    )
+    url = (
+        f"{settings.base_url}/api/teams/{team_id}/projects/{settings.project_id}"
+        f"/legaldocs/{legal_doc_id}/parts/{legal_doc_part_id}/encoding/"
+    )
+    return await _request_json(method="DELETE", url=url, api_key=settings.api_key, timeout_seconds=60.0)
 
 
 async def _get_part(
@@ -655,17 +1495,17 @@ async def _get_part(
         }
 
     # Fallback for non-JSON or unexpected responses.
-    return {
-        "ok": resp["ok"],
-        "status_code": resp["status_code"],
-        "part": _public_part_name(part_name),
-        "type": None,
-        "start": start,
-        "end": end,
-        "total": None,
-        "data": body,
-        "note": "Unexpected response shape; returned body as data",
-    }
+    return _unexpected_response_result(
+        resp,
+        error=f"Expected explanation part response for {part_name}, but Blawx returned a different response shape.",
+        note="The raw Blawx response is preserved in `body`. `data` mirrors that body for compatibility with existing callers.",
+        part=_public_part_name(part_name),
+        type=None,
+        start=start,
+        end=end,
+        total=None,
+        data=body,
+    )
 
 
 @mcp.tool()
@@ -681,6 +1521,9 @@ async def blawx_get_model_part(
 
     Uses optional 1-based inclusive line slicing via start/end.
     Returns an object with fields: part, type, start, end, total, data.
+
+    If the Blawx server returns an unexpected response shape, the raw server response is
+    preserved in `body` and mirrored in `data` for compatibility.
 
     If `status_code` is 410, the cache key has expired and you must re-run an ask tool.
     """
@@ -710,6 +1553,9 @@ async def blawx_get_attributes_part(
     Uses optional 1-based inclusive line slicing via start/end.
     Returns an object with fields: part, type, start, end, total, data.
 
+    If the Blawx server returns an unexpected response shape, the raw server response is
+    preserved in `body` and mirrored in `data` for compatibility.
+
     If `status_code` is 410, the cache key has expired and you must re-run an ask tool.
     """
 
@@ -737,6 +1583,9 @@ async def blawx_get_explanation_part(
 
     Uses optional 1-based inclusive line slicing via start/end.
     Returns an object with fields: part, type, start, end, total, data.
+
+    If the Blawx server returns an unexpected response shape, the raw server response is
+    preserved in `body` and mirrored in `data` for compatibility.
 
         Important:
             - Always review the attributes part for the same explanation. The explanation text can
@@ -775,6 +1624,9 @@ async def blawx_get_constraint_satisfaction_part(
     Uses optional 1-based inclusive line slicing via start/end.
     Returns an object with fields: part, type, start, end, total, data.
 
+    If the Blawx server returns an unexpected response shape, the raw server response is
+    preserved in `body` and mirrored in `data` for compatibility.
+
     If `status_code` is 410, the cache key has expired and you must re-run an ask tool.
     """
 
@@ -789,9 +1641,29 @@ async def blawx_get_constraint_satisfaction_part(
     )
 
 
-def main() -> None:
-    # SSE transport runs an HTTP server (uvicorn). We log a small banner so it's
-    # obvious the server is up.
+def _build_arg_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Run the Blawx MCP server.")
+    parser.add_argument(
+        "--stdio",
+        action="store_true",
+        help="Run over stdio instead of SSE/HTTP.",
+    )
+    return parser
+
+
+def _log_loaded_tools(logger: logging.Logger) -> None:
+    logger.info(
+        "Loaded tools: health, ontology (read + read-write CRUD), facts (read + CRUD), "
+        "questions (read shared + CRUD), ask/answers/explanations, legaldocs (read), encoding (read-write)"
+    )
+    logger.info(
+        "Config via env: BLAWX_BASE_URL (default https://app.blawx.dev), BLAWX_API_KEY, BLAWX_TEAM_SLUG, BLAWX_PROJECT_ID"
+    )
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = _build_arg_parser().parse_args(argv)
+
     log_level = os.environ.get("BLAWX_MCP_LOG_LEVEL", "INFO").upper()
     logging.basicConfig(
         level=getattr(logging, log_level, logging.INFO),
@@ -800,20 +1672,18 @@ def main() -> None:
     )
 
     logger = logging.getLogger("blawx_mcp")
+
+    if args.stdio:
+        logger.info("Starting blawx-mcp MCP server (stdio)")
+        _log_loaded_tools(logger)
+        asyncio.run(mcp.run_stdio_async())
+        return
+
+    # SSE transport runs an HTTP server (uvicorn). We log a small banner so it's
+    # obvious the server is up.
     logger.info("Starting blawx-mcp MCP server (SSE)")
     logger.info("Listening on http://%s:%s/sse", mcp.settings.host, mcp.settings.port)
-    logger.info(
-        "Loaded tools: blawx_health, blawx_ontology_list, blawx_ontology_category_detail, "
-        "blawx_ontology_relationship_detail, blawx_fact_scenarios_list, blawx_fact_scenario_detail, "
-        "blawx_questions_list, blawx_question_detail, "
-        "blawx_question_ask_with_fact_scenario, blawx_question_ask_with_facts, "
-        "blawx_list_answers, blawx_list_explanations, "
-        "blawx_get_model_part, blawx_get_attributes_part, blawx_get_explanation_part, "
-        "blawx_get_constraint_satisfaction_part"
-    )
-    logger.info(
-        "Config via env: BLAWX_BASE_URL (default https://app.blawx.dev), BLAWX_API_KEY, BLAWX_TEAM_SLUG, BLAWX_PROJECT_ID"
-    )
+    _log_loaded_tools(logger)
     logger.info(
         "Server bind via env: BLAWX_MCP_HOST (default 127.0.0.1), BLAWX_MCP_PORT (default 8765)"
     )
