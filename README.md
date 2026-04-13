@@ -14,6 +14,52 @@ From this repo root:
 python -m pip install -e .
 ```
 
+### Example: Windows + Claude Desktop
+
+This is one way to set up the MCP server locally for Claude Desktop on Windows.
+
+1. Clone the repository locally.
+
+```powershell
+git clone https://github.com/Lexpedite/blawx_mcp.git
+cd blawx_mcp
+```
+
+2. Install the package.
+
+```powershell
+python -m pip install .
+```
+
+3. Find your team slug and project id from your Blawx project URL. The pattern is:
+
+```text
+https://app.blawx.dev/a/{team_slug}/project/{project_id}
+```
+
+4. Generate an API key from the Blawx profile page. In the left navigation bar, click "Profile", then use the "Add API Key" button. Copy the key when it is shown.
+
+5. Add the MCP server to your Claude Desktop configuration file, typically at `%APPDATA%\Claude\claude_desktop_config.json`:
+
+```json
+{
+	"mcpServers": {
+		"blawx-mcp": {
+			"command": "python",
+			"args": ["-m", "blawx_mcp", "--stdio"],
+			"env": {
+				"BLAWX_API_KEY": "your API Key Here",
+				"BLAWX_TEAM_SLUG": "your_team_name",
+				"BLAWX_PROJECT_ID": "your_proj_number"
+			}
+		}
+	}
+}
+```
+
+You will need to completely quit Claude Desktop (using the Claude icon in the system tray and selecting "Quit", then restarting) and restart for 
+the changes to your configuration to take effect.
+
 ## Configuration
 
 Set required configuration in your environment:
