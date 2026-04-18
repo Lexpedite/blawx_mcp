@@ -74,6 +74,93 @@ class QuestionPayload(NamedWorkspacePayload):
     )
 
 
+class LegalDocPayload(BaseModel):
+    """Payload for legal doc create/update writes."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(..., description="Human-readable name for the legal document.")
+    slug: str = Field(..., description="Short identifier used for citations and URLs.")
+    tag_ids: list[int] = Field(
+        default_factory=list,
+        description="Optional list of tag ids to attach to the legal document.",
+    )
+
+
+class LegalDocPartCreatePayload(BaseModel):
+    """Payload for legal doc part create writes.
+
+    The API allows an empty payload. When omitted, the server derives defaults such as
+    path/depth and links the part to the legal document in the URL.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    parent_id: Optional[int] = Field(
+        None,
+        description="Optional parent part id for nested parts at creation time.",
+    )
+    element_type: Optional[str] = Field(
+        None,
+        description="Optional structural label such as Section, Subsection, Paragraph, or Heading.",
+    )
+    index_text: Optional[str] = Field(
+        None,
+        description="Optional displayed numbering text such as 41, (1), or (a).",
+    )
+    text_content: Optional[str] = Field(
+        None,
+        description="Optional substantive text for the part.",
+    )
+    include_parent: Optional[bool] = Field(
+        None,
+        description="Whether context should include parent text when available.",
+    )
+    include_sibling: Optional[bool] = Field(
+        None,
+        description="Whether context should include sibling text when available.",
+    )
+    substantive: Optional[bool] = Field(
+        None,
+        description="Whether the part is substantive for reasoning purposes.",
+    )
+
+
+class LegalDocPartUpdatePayload(BaseModel):
+    """Payload for legal doc part update writes.
+
+    Do not include `parent_id` when updating. The current API rejects re-parenting via
+    PUT even when the value is unchanged.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    element_type: Optional[str] = Field(
+        None,
+        description="Optional structural label such as Section, Subsection, Paragraph, or Heading.",
+    )
+    index_text: Optional[str] = Field(
+        None,
+        description="Optional displayed numbering text such as 41, (1), or (a).",
+    )
+    text_content: Optional[str] = Field(
+        None,
+        description="Optional substantive text for the part.",
+    )
+    include_parent: Optional[bool] = Field(
+        None,
+        description="Whether context should include parent text when available.",
+    )
+    include_sibling: Optional[bool] = Field(
+        None,
+        description="Whether context should include sibling text when available.",
+    )
+    substantive: Optional[bool] = Field(
+        None,
+        description="Whether the part is substantive for reasoning purposes.",
+    )
+
+
 class VariableRef(BaseModel):
     """Represents a variable in the ask payload.
 
