@@ -6,6 +6,7 @@ Use this guide first, then follow the referenced specialized guides at each step
 
 ## Tool touchpoints
 
+- Project discovery: `blawx_projects_list`
 - Legal text discovery: `blawx_legaldocs_list`, `blawx_legaldocparts_list`, `blawx_legaldocpart_detail`
 - Existing encoding: `blawx_encodingpart_get`
 - Ontology inspection/update: `blawx_ontology_list`, `blawx_ontology_category_detail`, `blawx_ontology_relationship_detail`, and related ontology write tools if needed
@@ -15,11 +16,12 @@ Use this guide first, then follow the referenced specialized guides at each step
 
 ## 1) Select source sections
 
-1. Identify the legal document and relevant parts.
+1. Call `blawx_projects_list` and choose the `project_id` you will pass to every project-scoped tool.
+2. Identify the legal document and relevant parts.
 2. Read the text of each target part in context.
 3. Skip non-substantive or administrative sections unless they affect reasoning outcomes.
 
-If needed for tool behavior and legal-doc navigation details, read guide topic: `encodingpart`.
+If needed for project/legal-document navigation and write behavior, read guide topics: `legaldocs` and `encodingpart`.
 
 ## 2) Plan traceable rule boundaries
 
@@ -91,6 +93,9 @@ For concrete valid payload examples, read guide topics: `valid-blawx-json` and `
 ```
 
 For strict write-contract details, read guide topic: `encodingpart`.
+
+Remember: every tool in this workflow other than `blawx_health` and `blawx_encoding_guide`
+now requires the explicit `project_id` you selected at the start.
 
 ## 8) Execute tests and inspect explanations
 
