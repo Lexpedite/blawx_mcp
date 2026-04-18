@@ -6,6 +6,18 @@ This guide is intentionally narrow: it defines tool behavior and write-contract 
 
 For the full end-to-end authoring workflow, use `encoding-process` first.
 
+## Mandatory first step
+
+Before any project-scoped tool call, call `blawx_projects_list`, choose the target
+`project_id`, and pass that `project_id` to every later legal-doc, ontology, question,
+fact-scenario, ask/answer, and encoding tool call.
+
+Only `blawx_health` and `blawx_encoding_guide` can be used before project selection.
+
+Plan LegalDocPart structure before encoding. One EncodingPart attaches to one LegalDocPart,
+so if the legislation should be split into multiple parts, create those parts first and then
+encode them separately.
+
 ## Tool touchpoints
 
 - `blawx_encodingpart_get`: read the current encoding for a legal doc part.
@@ -16,9 +28,6 @@ For the full end-to-end authoring workflow, use `encoding-process` first.
 Important: `blawx_legaldocparts_list` is primarily navigational metadata (ids/titles/order).
 Use `blawx_legaldocpart_detail` to read the text of a specific legal doc part.
 
-Before any of those tools, select a project with `blawx_projects_list` and pass that
-`project_id` through every project-scoped call.
-
 ## Important: what the write tools accept
 
 The MCP write tools for encoding parts intentionally accept **only the Blawx JSON blocks** encoding.
@@ -27,4 +36,4 @@ The MCP write tools for encoding parts intentionally accept **only the Blawx JSO
 - Do **not** provide s(CASP) text/code in the write tools.
 - Blawx should (re)calculate the s(CASP) encoding automatically when the JSON changes.
 
-Legal document structure and write-field guidance now lives in guide topic: `legaldocs`.
+Legal document structure, LegalDocPart granularity, and write-field guidance now live in guide topic: `legaldocs`.

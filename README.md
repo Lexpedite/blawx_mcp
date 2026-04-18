@@ -132,6 +132,8 @@ tool definition in your `mcp.json` for VS Code.
 
 These tools give your coding agent the following capabilities:
 
+All project-scoped tools require a `project_id`. Agents should always call `blawx_projects_list` first, then pass the returned `project_id` to every later ontology, legal-doc, question, fact-scenario, ask/answer, and encoding tool.
+
 1. Discover projects under the configured team and choose a `project_id`.
 2. Discover what the chosen project exposes (questions, fact scenarios, ontology).
 3. Create, update, and delete LegalDocs, LegalDocParts, and EncodingParts.
@@ -310,6 +312,10 @@ The API supports read-write legal documents, legal document parts, and encoding 
 - `blawx_encoding_guide`, `blawx_encodingpart_get`, `blawx_encodingpart_update`, `blawx_encodingpart_delete`
 
 All of these tools require `project_id`.
+
+Default LegalDocPart granularity rule: preserve the legislative hierarchy. Each heading gets its own part, each section gets its own part for section-level text, a section with no subordinate units is one part, and each subsection, paragraph, or similar subordinate unit gets its own part when it has distinct text. Do not merge separately addressable legislative units into one part just because their logic is related.
+
+For the full LegalDocPart structure guidance, including `parent_id`, `include_parent`, `include_sibling`, and worked examples, read `blawx_encoding_guide` topic `legaldocs`.
 
 **To read legislation text, use this sequence:**
 

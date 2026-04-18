@@ -66,13 +66,18 @@ mcp = FastMCP(
 
 @mcp.tool()
 async def blawx_encoding_guide(topic: str = "quickstart") -> dict[str, Any]:
-    """Read this first before editing encoding parts.
+    """Read this first before project-scoped encoding work.
 
-    Use this tool before `blawx_encodingpart_update` to learn:
+    Use this tool before project-scoped legal-doc, encoding, ontology, question,
+    fact-scenario, or ask/answer work to learn:
+    - mandatory first step: call `blawx_projects_list` and choose a `project_id`
     - primary end-to-end workflow (`encoding-process`)
     - required request shape (`blawx_json` key only)
     - Blawx JSON formatting expectations
     - supporting reference guides
+
+    `blawx_health` and `blawx_encoding_guide` are the only tools that do not require
+    a `project_id` discovered with `blawx_projects_list`.
 
     Topics: quickstart | blawx-json | valid-blawx-json | blawx-blocks | encodingpart | encoding-process | encoding-examples | ontology | legaldocs | scasp | all
     """
@@ -105,12 +110,14 @@ async def blawx_encoding_guide(topic: str = "quickstart") -> dict[str, Any]:
     }
 
     quickstart = (
-        "Start with `encoding-process` for the canonical workflow.\n"
+        "First call `blawx_projects_list` and choose the `project_id` you will pass to every project-scoped tool. "
+        "Every tool except `blawx_health` and `blawx_encoding_guide` requires that `project_id`.\n"
+        "Then start with `encoding-process` for the canonical workflow.\n"
         "Then read `encodingpart` for write-tool contract details.\n"
         "Then read `blawx-json` and `blawx-blocks` for block-shape guidance.\n"
         "Use `valid-blawx-json` and `encoding-examples` for concrete patterns.\n"
-        "Use `legaldocs` for project selection and legal-doc/legal-doc-part structure.\n"
-        "Use `blawx_encodingpart_get` to inspect current encoding first.\n"
+        "Use `legaldocs` for LegalDocPart granularity, hierarchy planning, and context-field guidance.\n"
+        "Use `blawx_encodingpart_get` to inspect current encoding first, after selecting `project_id`.\n"
         "When writing, call `blawx_encodingpart_update` with only this shape:\n"
         "`{\"blawx_json\": <json object>}`\n"
         "Do not send `content`, `scasp_encoding`, or stringified JSON.\n"
@@ -121,6 +128,9 @@ async def blawx_encoding_guide(topic: str = "quickstart") -> dict[str, Any]:
         selected = quickstart
     elif normalized == "all":
         selected = (
+            "# Mandatory First Step\n"
+            "Call `blawx_projects_list` before any project-scoped tool. Every tool except `blawx_health` "
+            "and `blawx_encoding_guide` requires a `project_id` returned by that call.\n\n"
             "# Quickstart\n"
             f"{quickstart}\n\n"
             "# EncodingPart Workflow\n"
@@ -562,7 +572,10 @@ async def blawx_health() -> dict[str, Any]:
 async def blawx_projects_list() -> dict[str, Any]:
     """List projects available under the configured team.
 
-    Use one of the returned ids as the `project_id` argument on downstream tools.
+    Call this tool first for any project-scoped work.
+
+    Every tool except `blawx_health` and `blawx_encoding_guide` requires a
+    `project_id` returned here.
     """
 
     settings = get_settings()
@@ -576,10 +589,11 @@ async def blawx_projects_list() -> dict[str, Any]:
     return {
         **result,
         "workflow_hint": (
-            "Pick a project id from this list and pass it as `project_id` to every downstream "
-            "project-scoped tool."
+            "Call this tool first. Pick a project id from this list and pass it as `project_id` "
+            "to every downstream project-scoped tool. Only blawx_health and blawx_encoding_guide "
+            "do not require it."
         ),
-        "next_recommended_tool": "blawx_ontology_list",
+        "next_recommended_tool": "blawx_project_detail",
     }
 
 
@@ -598,13 +612,23 @@ async def blawx_project_detail(project_id: int) -> dict[str, Any]:
 @mcp.tool()
 async def blawx_ontology_list(project_id: int) -> dict[str, Any]:
     """List ontology (available categories and relationships).
+
+    `project_id` is required and should be obtained via `blawx_projects_list`.
     """
-    return await _project_request_json(
+    result = await _project_request_json(
         method="GET",
         project_id=project_id,
         api_path="ontology/",
         timeout_seconds=30.0,
     )
+    return {
+        **result,
+        "workflow_hint": (
+            "This tool is project-scoped. Obtain `project_id` from blawx_projects_list first, "
+            "then use category/relationship detail tools for specific ids from this list."
+        ),
+        "next_recommended_tool": "blawx_ontology_category_detail",
+    }
 
 
 @mcp.tool()
@@ -1338,6 +1362,8 @@ async def blawx_get_explanation_full(
 async def blawx_legaldocs_list(project_id: int) -> dict[str, Any]:
     """List legal docs in the project.
 
+    `project_id` is required and should be obtained via `blawx_projects_list`.
+
     This returns document-level metadata. To read legislation text, then call:
     1) `blawx_legaldocparts_list` for the chosen legal doc
     2) `blawx_legaldocpart_detail` for each relevant part
@@ -1352,9 +1378,10 @@ async def blawx_legaldocs_list(project_id: int) -> dict[str, Any]:
     return {
         **result,
         "workflow_hint": (
-            "This is a document list. To read legal text, call blawx_legaldocparts_list "
-            "for a legal_doc_id, then call blawx_legaldocpart_detail for the relevant part(s). "
-            "For structure and write fields, read blawx_encoding_guide topic 'legaldocs'."
+            "This tool is project-scoped; obtain `project_id` from blawx_projects_list first. "
+            "This is a document list. To read legal text, call blawx_legaldocparts_list for a legal_doc_id, "
+            "then call blawx_legaldocpart_detail for the relevant part(s). For structure and write fields, "
+            "read blawx_encoding_guide topic 'legaldocs'."
         ),
         "next_recommended_tool": "blawx_legaldocparts_list",
     }
@@ -1446,6 +1473,8 @@ async def blawx_legaldoc_delete(project_id: int, legal_doc_id: int) -> dict[str,
 async def blawx_legaldocparts_list(project_id: int, legal_doc_id: int) -> dict[str, Any]:
     """List parts for a legal doc.
 
+    `project_id` is required and should be obtained via `blawx_projects_list`.
+
     This list is mainly navigational metadata (part ids/titles/order). To view the
     actual legislation text for a part, call `blawx_legaldocpart_detail` for that part id.
     """
@@ -1459,8 +1488,10 @@ async def blawx_legaldocparts_list(project_id: int, legal_doc_id: int) -> dict[s
     return {
         **result,
         "workflow_hint": (
-            "This is a parts list. To read the actual text, call blawx_legaldocpart_detail "
-            "for each relevant legal_doc_part_id. Use blawx_legaldocpart_create to add a new part."
+            "This tool is project-scoped; obtain `project_id` from blawx_projects_list first. "
+            "This is a parts list. To read the actual text, call blawx_legaldocpart_detail for each relevant "
+            "legal_doc_part_id. Use blawx_legaldocpart_create to add a new part, and default to one part per "
+            "heading, section, subsection, paragraph, or similar legislative unit with distinct text."
         ),
         "next_recommended_tool": "blawx_legaldocpart_detail",
     }
@@ -1474,8 +1505,11 @@ async def blawx_legaldocpart_create(
 ) -> dict[str, Any]:
     """Create a legal doc part.
 
+    `project_id` is required and should be obtained via `blawx_projects_list`.
+
     The API allows an empty payload. `parent_id` may be supplied at creation time for nested
-    parts; the legal doc linkage itself comes from the URL.
+    parts; the legal doc linkage itself comes from the URL. One EncodingPart attaches to one
+    LegalDocPart, so decide the legislative hierarchy and part boundaries before creating parts.
     """
 
     result = await _project_request_json(
@@ -1488,9 +1522,11 @@ async def blawx_legaldocpart_create(
     return {
         **result,
         "workflow_hint": (
-            "After creating a part, inspect its text with blawx_legaldocpart_detail or attach an "
-            "encoding with blawx_encodingpart_update. Read blawx_encoding_guide topic 'legaldocs' "
-            "for structure details."
+            "This tool is project-scoped; obtain `project_id` from blawx_projects_list first. "
+            "Create one LegalDocPart per heading, section, subsection, paragraph, or similar legislative "
+            "unit when that unit has distinct text. After creating a part, inspect its text with "
+            "blawx_legaldocpart_detail or attach an encoding with blawx_encodingpart_update. Read "
+            "blawx_encoding_guide topic 'legaldocs' for structure details."
         ),
         "next_recommended_tool": "blawx_encodingpart_update",
     }
@@ -1560,16 +1596,28 @@ async def blawx_legaldocpart_delete(project_id: int, legal_doc_id: int, legal_do
 async def blawx_encodingpart_get(project_id: int, legal_doc_id: int, legal_doc_part_id: int) -> dict[str, Any]:
     """Get the encoding for a specific legal doc part.
 
+    `project_id` is required and should be obtained via `blawx_projects_list`.
+
     Use `blawx_encoding_guide` first (topic: quickstart, then blawx-json/encodingpart)
-    before creating or editing encoding payloads.
+    before creating or editing encoding payloads. One EncodingPart attaches to one LegalDocPart,
+    so confirm part granularity before editing.
     """
 
-    return await _project_request_json(
+    result = await _project_request_json(
         method="GET",
         project_id=project_id,
         api_path=f"legaldocs/{legal_doc_id}/parts/{legal_doc_part_id}/encoding/",
         timeout_seconds=30.0,
     )
+    return {
+        **result,
+        "workflow_hint": (
+            "This tool is project-scoped; obtain `project_id` from blawx_projects_list first. "
+            "Use this result to inspect the current encoding before replacing it. If part boundaries are unclear, "
+            "read blawx_encoding_guide topics 'legaldocs' and 'encoding-process' before editing."
+        ),
+        "next_recommended_tool": "blawx_encodingpart_update",
+    }
 
 
 @mcp.tool()
@@ -1581,19 +1629,31 @@ async def blawx_encodingpart_update(
 ) -> dict[str, Any]:
     """Replace the encoding for a legal doc part (PUT).
 
+    `project_id` is required and should be obtained via `blawx_projects_list`.
+
     Read `blawx_encoding_guide` first. This tool accepts only this payload shape:
     {"blawx_json": <json object>}
 
-    Do not send `content`, `scasp_encoding`, or stringified JSON.
+    Do not send `content`, `scasp_encoding`, or stringified JSON. One EncodingPart attaches
+    to one LegalDocPart, so split the legal text into the correct parts before encoding.
     """
 
-    return _annotate_blawx_json_error(await _project_request_json(
+    result = _annotate_blawx_json_error(await _project_request_json(
         method="PUT",
         project_id=project_id,
         api_path=f"legaldocs/{legal_doc_id}/parts/{legal_doc_part_id}/encoding/",
         json_body=payload.model_dump(),
         timeout_seconds=60.0,
     ))
+    return {
+        **result,
+        "workflow_hint": (
+            "This tool is project-scoped; obtain `project_id` from blawx_projects_list first. "
+            "Write encoding only after confirming the LegalDocPart boundaries are correct, because each "
+            "encoding attaches to exactly one part."
+        ),
+        "next_recommended_tool": "blawx_legaldocpart_detail",
+    }
 
 
 @mcp.tool()
