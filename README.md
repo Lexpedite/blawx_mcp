@@ -399,3 +399,30 @@ the other parts of an explanation.
 The Blawx server used can be overridden for local development
 
 - `BLAWX_BASE_URL` (default: `https://app.blawx.dev`)
+
+## Embedding as a Library (multi-tenant / hosted use)
+
+`blawx_mcp` can be imported as a library in a hosted multi-tenant server. Use
+`settings_context()` to inject per-request `Settings` so concurrent requests from
+different users never collide on configuration or cached state.
+
+```python
+from blawx_mcp import Settings, settings_context
+from blawx_mcp.config import _settings_override
+
+settings = Settings(
+    base_url="https://app.blawx.dev",
+    api_key="my-key",
+    team_slug="my-team",
+)
+token = settings_context(settings)
+try:
+    # ... invoke MCP tools in this async context ...
+    pass
+finally:
+    _settings_override.reset(token)
+```
+
+`settings_context()` uses Python's `contextvars.ContextVar` under the hood, which is
+async-safe: each `asyncio` task inherits its own copy of the context so concurrent
+requests cannot collide even when running in the same event loop.

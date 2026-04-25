@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows Semantic Versioning.
 
+## [0.3.0] - 2026-04-25
+
+### Added
+- Added `settings_context()` in `config.py` to allow per-request `Settings` injection via `contextvars.ContextVar`. Hosted multi-tenant consumers can now inject per-user settings without touching environment variables.
+- Exported `Settings`, `get_settings`, `settings_context`, and `mcp` from `blawx_mcp.__init__` as a stable public API.
+- Added ADR at `docs/adr/0001-contextvars-settings.md` documenting the design decision.
+- Added `pytest` test suite under `tests/` covering env-var path, settings injection, context isolation, and cache isolation.
+- Added GitHub Actions CI workflow (`.github/workflows/tests.yml`) that runs `pytest` on push and pull request across Python 3.10–3.12.
+
+### Changed
+- `_TEAM_ID_CACHE` in `server.py` is now keyed by `(api_key, team_slug)` tuple instead of `team_slug` alone, preventing cross-user cache collisions in multi-tenant deployments.
+- Bumped version to `0.3.0`.
+
+## [0.2.1] - 2026-04-18
+
+### Added
+- Added project-listing and rules-management tooling (PR #2: Add projects and rules).
+
 ## [0.2.0] - 2026-04-11
 
 ### Added

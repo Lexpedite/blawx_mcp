@@ -33,7 +33,7 @@ from .schemas import (
     QuestionPayload,
 )
 
-_TEAM_ID_CACHE: dict[str, int] = {}
+_TEAM_ID_CACHE: dict[tuple[str, str], int] = {}
 _PROJECT_ID_ERROR = "project_id must be a positive integer. Discover valid ids with blawx_projects_list."
 
 
@@ -432,7 +432,7 @@ async def _request_json(
 
 
 async def _resolve_team_id(*, base_url: str, api_key: str, team_slug: str) -> int:
-    cached = _TEAM_ID_CACHE.get(team_slug)
+    cached = _TEAM_ID_CACHE.get((api_key, team_slug))
     if cached is not None:
         return cached
 
@@ -454,7 +454,7 @@ async def _resolve_team_id(*, base_url: str, api_key: str, team_slug: str) -> in
             for team in results:
                 if isinstance(team, dict) and team.get("slug") == team_slug:
                     team_id = int(team["id"])
-                    _TEAM_ID_CACHE[team_slug] = team_id
+                    _TEAM_ID_CACHE[(api_key, team_slug)] = team_id
                     return team_id
 
             next_url = data.get("next")
