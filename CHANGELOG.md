@@ -17,6 +17,11 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - `_TEAM_ID_CACHE` in `server.py` is now keyed by `(api_key, team_slug)` tuple instead of `team_slug` alone, preventing cross-user cache collisions in multi-tenant deployments.
 - Bumped version to `0.3.0`.
 
+## [0.2.1] - 2026-04-18
+
+### Added
+- Added project-listing and rules-management tooling (PR #2: Add projects and rules).
+
 ## [0.2.0] - 2026-04-11
 
 ### Added
