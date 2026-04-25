@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from contextvars import ContextVar, Token
 from dataclasses import dataclass
 
 
@@ -11,7 +12,16 @@ class Settings:
     team_slug: str
 
 
+_settings_override: ContextVar[Settings | None] = ContextVar(
+    "_settings_override", default=None
+)
+
+
 def get_settings() -> Settings:
+    override = _settings_override.get()
+    if override is not None:
+        return override
+
     base_url = os.environ.get("BLAWX_BASE_URL", "https://app.blawx.dev").rstrip("/")
     api_key = os.environ.get("BLAWX_API_KEY", "").strip()
     if not api_key:
@@ -29,3 +39,8 @@ def get_settings() -> Settings:
         api_key=api_key,
         team_slug=team_slug,
     )
+
+
+def settings_context(settings: Settings) -> Token[Settings | None]:
+    """Return a Token from ContextVar.set(). Caller is responsible for reset()."""
+    return _settings_override.set(settings)

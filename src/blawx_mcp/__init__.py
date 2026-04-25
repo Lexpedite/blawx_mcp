@@ -1,3 +1,6 @@
-__all__ = ["__version__"]
+from .config import Settings, get_settings, settings_context
+from .server import mcp
 
-__version__ = "0.2.0"
+__all__ = ["mcp", "Settings", "get_settings", "settings_context"]
+
+__version__ = "0.3.0"
