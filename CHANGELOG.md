@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows Semantic Versioning.
 
+## [0.4.0] - 2026-04-26
+
+### Added
+- Added `blawx_teams_list` so agents can discover teams available to the configured API key before selecting a project.
+- Added explicit `team_slug` arguments to project-scoped tools so hosted and local clients select teams at tool-call time instead of startup time.
+- Added guidance across README, MCP tool help, and encoding/legal-doc guides instructing agents to use the only available team automatically, or ask the user which team to use when multiple teams are available.
+- Added tests covering discovery tool signatures and explicit `team_slug` requirements for project-scoped tools.
+
+### Changed
+- Removed `BLAWX_TEAM_SLUG` from required environment configuration. `BLAWX_API_KEY` is now the only required startup setting.
+- Updated hosted-consumer guidance so `Settings` carries only base URL and API key; team selection is provided through tool arguments.
+- Bumped version to `0.4.0`.
+
+### Notes
+- Confirmed `GET https://app.blawx.dev/teams/api/teams/` exists on Blawx: unauthenticated requests return `403` with `{"detail":"Authentication credentials were not provided."}` rather than `404`.
+
 ## [0.3.0] - 2026-04-25
 
 ### Added
