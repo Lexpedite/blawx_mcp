@@ -2,15 +2,17 @@
 
 Use this guide when you need to navigate or edit the legal text structure that sits above encoding parts.
 
-## Project selection first
+## Team and project selection first
 
 All legal-document tools are project-scoped.
 
-1. Call `blawx_projects_list`.
-2. Choose the target `project_id`.
-3. Pass that `project_id` to every legal-doc, part, ontology, question, fact-scenario, and encoding-part tool.
+1. Call `blawx_teams_list`.
+2. If exactly one team is returned, use that team's `slug` as `team_slug`; if multiple teams are returned and the user has not identified one, ask which team to use.
+3. Call `blawx_projects_list` with `team_slug`.
+4. Choose the target `project_id`.
+5. Pass that `team_slug` and `project_id` to every legal-doc, part, ontology, question, fact-scenario, and encoding-part tool.
 
-Only `blawx_health` and `blawx_encoding_guide` can be used before project selection.
+Only `blawx_health`, `blawx_teams_list`, and `blawx_encoding_guide` can be used before project selection.
 
 ## Resource model
 
