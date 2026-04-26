@@ -31,17 +31,9 @@ cd blawx_mcp
 python -m pip install .
 ```
 
-3. Find your team slug from a Blawx project URL. The pattern is:
+3. Generate an API key from the Blawx profile page. In the left navigation bar, click "Profile", then use the "Add API Key" button. Copy the key when it is shown.
 
-```text
-https://app.blawx.dev/a/{team_slug}/project/{project_id}
-```
-
-The MCP server no longer needs `project_id` at startup. Agents discover projects at runtime with `blawx_projects_list` and pass the chosen `project_id` to project-scoped tools.
-
-4. Generate an API key from the Blawx profile page. In the left navigation bar, click "Profile", then use the "Add API Key" button. Copy the key when it is shown.
-
-5. Add the MCP server to your Claude Desktop configuration file, typically at `%APPDATA%\Claude\claude_desktop_config.json`:
+4. Add the MCP server to your Claude Desktop configuration file, typically at `%APPDATA%\Claude\claude_desktop_config.json`:
 
 ```json
 {
@@ -50,13 +42,14 @@ The MCP server no longer needs `project_id` at startup. Agents discover projects
 			"command": "python",
 			"args": ["-m", "blawx_mcp", "--stdio"],
 			"env": {
-				"BLAWX_API_KEY": "your API Key Here",
-				"BLAWX_TEAM_SLUG": "your_team_name"
+				"BLAWX_API_KEY": "your API Key Here"
 			}
 		}
 	}
 }
 ```
+
+The MCP server no longer needs `team_slug` or `project_id` at startup. Agents discover teams at runtime with `blawx_teams_list`, choose a team slug, then discover projects with `blawx_projects_list`.
 
 You will need to completely quit Claude Desktop (using the Claude icon in the system tray and selecting "Quit", then restarting) and restart for 
 the changes to your configuration to take effect.
@@ -67,15 +60,10 @@ Set required configuration in your environment:
 
 ```bash
 export BLAWX_API_KEY="your_key_here"
-export BLAWX_TEAM_SLUG="your_team_slug"
 ```
 
-You will find the team slug in the URL of your web browser when you go to a Blawx project. The pattern is
-`https://app.blawx.dev/a/{team_slug}/project/{project_id}`
-
-The `project_id` is now selected at tool-call time instead of startup time.
-Use `blawx_projects_list` after connecting the server, then pass the returned `project_id`
-to every project-scoped tool.
+Team and project selection happen at tool-call time instead of startup time.
+Use `blawx_teams_list` after connecting the server. If it returns exactly one team, use that team's `slug` as `team_slug`; if it returns multiple teams and the user has not already identified one, ask the user which team to use. Then call `blawx_projects_list` with `team_slug` and pass both `team_slug` and the returned `project_id` to every project-scoped tool.
 
 You can create a Blawx API Key if you have a Pro subscription to Blawx.
 Click on "Profile" in the left navigation bar, and find the "Add API 
@@ -132,13 +120,14 @@ tool definition in your `mcp.json` for VS Code.
 
 These tools give your coding agent the following capabilities:
 
-All project-scoped tools require a `project_id`. Agents should always call `blawx_projects_list` first, then pass the returned `project_id` to every later ontology, legal-doc, question, fact-scenario, ask/answer, and encoding tool.
+All project-scoped tools require both `team_slug` and `project_id`. Agents should always call `blawx_teams_list` first. If there is only one team, use that team's slug; if there are multiple teams and the user has not already identified one, ask the user which team to use. Then call `blawx_projects_list` with that `team_slug` and pass both `team_slug` and the returned `project_id` to every later ontology, legal-doc, question, fact-scenario, ask/answer, and encoding tool.
 
-1. Discover projects under the configured team and choose a `project_id`.
-2. Discover what the chosen project exposes (questions, fact scenarios, ontology).
-3. Create, update, and delete LegalDocs, LegalDocParts, and EncodingParts.
-4. Ask a question (using either a stored fact scenario or a custom facts payload).
-5. Browse answers and drill into explanations (model/attributes/explanation text).
+1. Discover teams and choose a `team_slug`.
+2. Discover projects under that team and choose a `project_id`.
+3. Discover what the chosen project exposes (questions, fact scenarios, ontology).
+4. Create, update, and delete LegalDocs, LegalDocParts, and EncodingParts.
+5. Ask a question (using either a stored fact scenario or a custom facts payload).
+6. Browse answers and drill into explanations (model/attributes/explanation text).
 
 Here's a brief run-down of the available tools.
 
@@ -148,12 +137,13 @@ Here's a brief run-down of the available tools.
 
 ### Discover Project Content
 
-Agents should start by listing projects under the configured team.
+Agents should start by listing teams, then listing projects under the selected team.
 
-- `blawx_projects_list`: lists the available projects for the configured team.
+- `blawx_teams_list`: lists the teams available to the configured API key.
+- `blawx_projects_list`: lists the available projects for a `team_slug`.
 - `blawx_project_detail`: retrieves metadata for a specific project id.
 
-Once a project is chosen, every project-scoped tool requires an explicit `project_id` argument.
+Once a team and project are chosen, every project-scoped tool requires explicit `team_slug` and `project_id` arguments.
 Agents will then usually list the available questions, fact scenarios, and vocabulary.
 
 - `blawx_questions_list`: lists shared questions available in the project.
@@ -170,12 +160,14 @@ Examples:
 
 ```json
 {
+	"team_slug": "my-team",
 	"project_id": 60
 }
 ```
 
 ```json
 {
+	"team_slug": "my-team",
 	"project_id": 60,
 	"question_id": 123
 }
@@ -249,7 +241,7 @@ Patch-style tools are intentionally not exposed in this MCP server to reduce too
 - `blawx_question_ask_with_facts`: asks a question using an explicit facts payload generated by your agent based on your
 instructions.
 
-Both ask tools require `project_id` in addition to `question_id` and their respective payload arguments.
+Both ask tools require `team_slug` and `project_id` in addition to `question_id` and their respective payload arguments.
 
 Both ask tools currently require shared questions.
 If you call either `blawx_question_ask_with_fact_scenario` or
@@ -311,7 +303,7 @@ The API supports read-write legal documents, legal document parts, and encoding 
 - `blawx_legaldocparts_list`, `blawx_legaldocpart_create`, `blawx_legaldocpart_detail`, `blawx_legaldocpart_update`, `blawx_legaldocpart_delete`
 - `blawx_encoding_guide`, `blawx_encodingpart_get`, `blawx_encodingpart_update`, `blawx_encodingpart_delete`
 
-All of these tools require `project_id`.
+All of these tools require `team_slug` and `project_id`.
 
 Default LegalDocPart granularity rule: preserve the legislative hierarchy. Each heading gets its own part, each section gets its own part for section-level text, a section with no subordinate units is one part, and each subsection, paragraph, or similar subordinate unit gets its own part when it has distinct text. Do not merge separately addressable legislative units into one part just because their logic is related.
 
@@ -319,10 +311,11 @@ For the full LegalDocPart structure guidance, including `parent_id`, `include_pa
 
 **To read legislation text, use this sequence:**
 
-1. `blawx_projects_list` to choose a `project_id`.
-2. `blawx_legaldocs_list` (or `blawx_legaldoc_detail`) to identify a `legal_doc_id`.
-3. `blawx_legaldocparts_list` to list part ids/titles/order for that document.
-4. `blawx_legaldocpart_detail` for each relevant `legal_doc_part_id` to retrieve the actual part text/content.
+1. `blawx_teams_list` to choose a `team_slug`.
+2. `blawx_projects_list` to choose a `project_id`.
+3. `blawx_legaldocs_list` (or `blawx_legaldoc_detail`) to identify a `legal_doc_id`.
+4. `blawx_legaldocparts_list` to list part ids/titles/order for that document.
+5. `blawx_legaldocpart_detail` for each relevant `legal_doc_part_id` to retrieve the actual part text/content.
 
 `blawx_legaldocparts_list` is primarily navigational metadata; `blawx_legaldocpart_detail` is the tool that returns the text for a specific part.
 
@@ -333,6 +326,7 @@ For the full LegalDocPart structure guidance, including `parent_id`, `include_pa
 
 ```json
 {
+	"team_slug": "my-team",
 	"project_id": 60,
 	"payload": {
 		"name": "Financial Administration Act",
@@ -346,6 +340,7 @@ For the full LegalDocPart structure guidance, including `parent_id`, `include_pa
 
 ```json
 {
+	"team_slug": "my-team",
 	"project_id": 60,
 	"legal_doc_id": 78,
 	"payload": {
@@ -391,9 +386,10 @@ the other parts of an explanation.
 
 ## Typical Workflow
 
-1. Start the server with `BLAWX_API_KEY` and `BLAWX_TEAM_SLUG`.
-2. Call `blawx_projects_list` and choose a `project_id`.
-3. Pass that `project_id` to ontology, fact-scenario, question, ask/answer, legal-doc, legal-doc-part, and encoding-part tools.
+1. Start the server with `BLAWX_API_KEY`.
+2. Call `blawx_teams_list` and choose a `team_slug`; if only one team is returned, use it.
+3. Call `blawx_projects_list` with `team_slug` and choose a `project_id`.
+4. Pass that `team_slug` and `project_id` to ontology, fact-scenario, question, ask/answer, legal-doc, legal-doc-part, and encoding-part tools.
 
 ## Development
 The Blawx server used can be overridden for local development
@@ -413,7 +409,6 @@ from blawx_mcp.config import _settings_override
 settings = Settings(
     base_url="https://app.blawx.dev",
     api_key="my-key",
-    team_slug="my-team",
 )
 token = settings_context(settings)
 try:
@@ -425,4 +420,6 @@ finally:
 
 `settings_context()` uses Python's `contextvars.ContextVar` under the hood, which is
 async-safe: each `asyncio` task inherits its own copy of the context so concurrent
-requests cannot collide even when running in the same event loop.
+requests cannot collide even when running in the same event loop. Team selection is
+provided by MCP tool arguments, so hosted consumers should pass `team_slug` through
+the team-scoped tool calls rather than injecting it into settings.

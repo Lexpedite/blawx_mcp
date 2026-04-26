@@ -9,7 +9,6 @@ from dataclasses import dataclass
 class Settings:
     base_url: str
     api_key: str
-    team_slug: str
 
 
 _settings_override: ContextVar[Settings | None] = ContextVar(
@@ -28,16 +27,9 @@ def get_settings() -> Settings:
         raise RuntimeError(
             "Missing BLAWX_API_KEY in environment. Set it to your Blawx API key."
         )
-    team_slug = os.environ.get("BLAWX_TEAM_SLUG", "").strip()
-    if not team_slug:
-        raise RuntimeError(
-            "Missing BLAWX_TEAM_SLUG in environment. Set it to your team slug."
-        )
-
     return Settings(
         base_url=base_url,
         api_key=api_key,
-        team_slug=team_slug,
     )
 
 

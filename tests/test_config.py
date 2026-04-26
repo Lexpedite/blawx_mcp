@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import asyncio
-import os
+import inspect
 import pytest
 
 from blawx_mcp.config import Settings, _settings_override, get_settings, settings_context
@@ -15,19 +15,16 @@ from blawx_mcp.config import Settings, _settings_override, get_settings, setting
 
 def test_get_settings_reads_env_vars(monkeypatch):
     monkeypatch.setenv("BLAWX_API_KEY", "test-key")
-    monkeypatch.setenv("BLAWX_TEAM_SLUG", "test-team")
     monkeypatch.setenv("BLAWX_BASE_URL", "https://custom.blawx.dev")
 
     s = get_settings()
 
     assert s.api_key == "test-key"
-    assert s.team_slug == "test-team"
     assert s.base_url == "https://custom.blawx.dev"
 
 
 def test_get_settings_default_base_url(monkeypatch):
     monkeypatch.setenv("BLAWX_API_KEY", "test-key")
-    monkeypatch.setenv("BLAWX_TEAM_SLUG", "test-team")
     monkeypatch.delenv("BLAWX_BASE_URL", raising=False)
 
     s = get_settings()
@@ -37,18 +34,18 @@ def test_get_settings_default_base_url(monkeypatch):
 
 def test_get_settings_raises_on_missing_api_key(monkeypatch):
     monkeypatch.delenv("BLAWX_API_KEY", raising=False)
-    monkeypatch.setenv("BLAWX_TEAM_SLUG", "test-team")
 
     with pytest.raises(RuntimeError, match="BLAWX_API_KEY"):
         get_settings()
 
 
-def test_get_settings_raises_on_missing_team_slug(monkeypatch):
+def test_get_settings_ignores_team_slug_env_var(monkeypatch):
     monkeypatch.setenv("BLAWX_API_KEY", "test-key")
-    monkeypatch.delenv("BLAWX_TEAM_SLUG", raising=False)
+    monkeypatch.setenv("BLAWX_TEAM_SLUG", "ignored-team")
 
-    with pytest.raises(RuntimeError, match="BLAWX_TEAM_SLUG"):
-        get_settings()
+    s = get_settings()
+
+    assert not hasattr(s, "team_slug")
 
 
 # ---------------------------------------------------------------------------
@@ -59,12 +56,10 @@ def test_get_settings_raises_on_missing_team_slug(monkeypatch):
 def test_settings_context_injects_settings(monkeypatch):
     # Even with env vars absent, the injected settings are returned.
     monkeypatch.delenv("BLAWX_API_KEY", raising=False)
-    monkeypatch.delenv("BLAWX_TEAM_SLUG", raising=False)
 
     injected = Settings(
         base_url="https://injected.example.com",
         api_key="injected-key",
-        team_slug="injected-team",
     )
     token = settings_context(injected)
     try:
@@ -81,25 +76,21 @@ def test_settings_context_injects_settings(monkeypatch):
 
 def test_settings_context_reset_restores_env_var_path(monkeypatch):
     monkeypatch.setenv("BLAWX_API_KEY", "env-key")
-    monkeypatch.setenv("BLAWX_TEAM_SLUG", "env-team")
 
     injected = Settings(
         base_url="https://injected.example.com",
         api_key="injected-key",
-        team_slug="injected-team",
     )
     token = settings_context(injected)
     _settings_override.reset(token)
 
     s = get_settings()
     assert s.api_key == "env-key"
-    assert s.team_slug == "env-team"
 
 
 def test_no_context_leakage_between_async_tasks(monkeypatch):
     """An override set in one asyncio task must not bleed into another."""
     monkeypatch.setenv("BLAWX_API_KEY", "env-key")
-    monkeypatch.setenv("BLAWX_TEAM_SLUG", "env-team")
 
     results: dict[str, str] = {}
 
@@ -107,7 +98,6 @@ def test_no_context_leakage_between_async_tasks(monkeypatch):
         injected = Settings(
             base_url="https://injected.example.com",
             api_key="task-key",
-            team_slug="task-team",
         )
         token = settings_context(injected)
         try:
@@ -151,3 +141,33 @@ def test_team_id_cache_isolation():
     assert _TEAM_ID_CACHE[("key-a", "my-team")] != _TEAM_ID_CACHE[("key-b", "my-team")]
 
     _TEAM_ID_CACHE.clear()
+
+
+def test_project_scoped_tools_require_team_slug():
+    """Project-scoped public tools should expose team_slug explicitly."""
+    from blawx_mcp import server
+
+    excluded = {"blawx_health", "blawx_encoding_guide", "blawx_teams_list"}
+    for name, func in vars(server).items():
+        if not name.startswith("blawx_") or name in excluded:
+            continue
+
+        signature = inspect.signature(func)
+        if "project_id" in signature.parameters:
+            assert "team_slug" in signature.parameters, name
+
+
+def test_discovery_tool_signatures():
+    from blawx_mcp import server
+
+    teams_signature = inspect.signature(server.blawx_teams_list)
+    projects_signature = inspect.signature(server.blawx_projects_list)
+
+    assert "team_slug" not in teams_signature.parameters
+    assert list(projects_signature.parameters) == ["team_slug"]
+
+
+def test_settings_has_no_team_slug():
+    signature = inspect.signature(Settings)
+
+    assert "team_slug" not in signature.parameters

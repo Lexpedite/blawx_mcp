@@ -8,11 +8,15 @@ For the full end-to-end authoring workflow, use `encoding-process` first.
 
 ## Mandatory first step
 
-Before any project-scoped tool call, call `blawx_projects_list`, choose the target
-`project_id`, and pass that `project_id` to every later legal-doc, ontology, question,
+Before any project-scoped tool call, call `blawx_teams_list`. If exactly one team
+is returned, use that team's `slug` as `team_slug`; if multiple teams are returned
+and the user has not identified one, ask which team to use. Then call
+`blawx_projects_list` with `team_slug`, choose the target `project_id`, and pass
+that `team_slug` and `project_id` to every later legal-doc, ontology, question,
 fact-scenario, ask/answer, and encoding tool call.
 
-Only `blawx_health` and `blawx_encoding_guide` can be used before project selection.
+Only `blawx_health`, `blawx_teams_list`, and `blawx_encoding_guide` can be used
+before project selection.
 
 Plan LegalDocPart structure before encoding. One EncodingPart attaches to one LegalDocPart,
 so if the legislation should be split into multiple parts, create those parts first and then

@@ -6,6 +6,7 @@ Use this guide first, then follow the referenced specialized guides at each step
 
 ## Tool touchpoints
 
+- Team discovery: `blawx_teams_list`
 - Project discovery: `blawx_projects_list`
 - Legal text discovery: `blawx_legaldocs_list`, `blawx_legaldocparts_list`, `blawx_legaldocpart_detail`
 - Existing encoding: `blawx_encodingpart_get`
@@ -14,11 +15,13 @@ Use this guide first, then follow the referenced specialized guides at each step
 - Test execution and analysis: ask tools, `blawx_list_answers`, explanation-part tools
 - Encoding write: `blawx_encodingpart_update`
 
-## 1) Select the project first
+## 1) Select the team and project first
 
-1. Call `blawx_projects_list` and choose the `project_id` you will pass to every project-scoped tool.
-2. Treat that `project_id` as mandatory for all later ontology, legal-doc, question, fact-scenario, ask/answer, and encoding calls.
-3. Only `blawx_health` and `blawx_encoding_guide` can be used without that `project_id`.
+1. Call `blawx_teams_list`.
+2. If exactly one team is returned, use that team's `slug` as `team_slug`; if multiple teams are returned and the user has not identified one, ask which team to use.
+3. Call `blawx_projects_list` with `team_slug` and choose the `project_id` you will pass to every project-scoped tool.
+4. Treat that `team_slug` and `project_id` as mandatory for all later ontology, legal-doc, question, fact-scenario, ask/answer, and encoding calls.
+5. Only `blawx_health`, `blawx_teams_list`, and `blawx_encoding_guide` can be used without both values.
 
 ## 2) Select source sections
 
@@ -116,8 +119,9 @@ For concrete valid payload examples, read guide topics: `valid-blawx-json` and `
 
 For strict write-contract details, read guide topic: `encodingpart`.
 
-Remember: every tool in this workflow other than `blawx_health` and `blawx_encoding_guide`
-now requires the explicit `project_id` you selected at the start.
+Remember: every tool in this workflow other than `blawx_health`, `blawx_teams_list`,
+and `blawx_encoding_guide` now requires the explicit `team_slug` and `project_id`
+you selected at the start.
 
 ## 9) Execute tests and inspect explanations
 

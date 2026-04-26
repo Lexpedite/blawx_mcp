@@ -8,7 +8,7 @@ Accepted
 
 `blawx_mcp` is used both as a local CLI/server tool (single-user, settings from environment
 variables) and as an embeddable library in hosted multi-tenant server environments (many
-concurrent users, each with their own Blawx API key and team slug).
+concurrent users, each with their own Blawx API key).
 
 In the original implementation, `get_settings()` always read configuration from environment
 variables and `_TEAM_ID_CACHE` used only `team_slug` as a key. This design works for
@@ -32,7 +32,12 @@ different users because:
    are responsible for calling `_settings_override.reset(token)` when the request
    context ends (e.g., in a `finally` block).
 
-3. **`(api_key, team_slug)` cache key**: `_TEAM_ID_CACHE` in `server.py` is changed from
+3. **Explicit team slug tool arguments**: `team_slug` is not process-wide configuration.
+   Agents discover available teams with `blawx_teams_list`, use the only team if there is
+   one, and ask the user to choose when multiple teams make the request ambiguous. The
+   chosen `team_slug` is then passed to every team-scoped tool call.
+
+4. **`(api_key, team_slug)` cache key**: `_TEAM_ID_CACHE` in `server.py` is changed from
    `dict[str, int]` to `dict[tuple[str, str], int]`. The cache key is now the pair
    `(api_key, team_slug)`, which prevents one user's cached team ID from being returned
    to a different user who happens to share the same team slug.
@@ -52,9 +57,8 @@ effectively a dictionary lookup that returns `None` and falls through immediatel
 
 ## Consequences
 
-- **No breaking changes.** Local CLI users and single-user SSE deployments see identical
-  behaviour. `get_settings()` is still called in exactly the same three places inside
-  `server.py` with no changes to those call sites.
+- **Breaking change.** Local CLI users and single-user SSE deployments no longer configure
+  `BLAWX_TEAM_SLUG`. Team selection is provided by MCP tool arguments.
 - **Hosted consumers** inject per-request settings by calling `settings_context()` before
   dispatching MCP tool calls and reset the override in a `finally` block:
 
@@ -65,7 +69,6 @@ effectively a dictionary lookup that returns `None` and falls through immediatel
   settings = Settings(
       base_url="https://app.blawx.dev",
       api_key="my-key",
-      team_slug="my-team",
   )
   token = settings_context(settings)
   try:
