@@ -405,6 +405,12 @@ async def _request_json(
     params: dict[str, Any] | list[tuple[str, Any]] | None = None,
     timeout_seconds: float = 30.0,
 ) -> dict[str, Any]:
+    """HTTP helper for API tools.
+
+    Return only what the server added: status, success, and parsed response body.
+    Do not echo request URL, headers, or JSON payload back into MCP tool output.
+    """
+
     headers = _auth_headers(api_key)
     timeout = httpx.Timeout(timeout_seconds)
     async with httpx.AsyncClient(timeout=timeout) as client:
@@ -418,21 +424,9 @@ async def _request_json(
 
     body = await _get_json_or_text(resp)
     return {
-        "url": url,
-        "params": params,
-        "request": json_body,
-        "request_headers": {
-            "authorization": "Api-Key <redacted>",
-            "accept": headers.get("Accept"),
-        },
         "status_code": resp.status_code,
         "ok": resp.is_success,
         "body": body,
-        "headers": {
-            "content-type": resp.headers.get("content-type"),
-            "www-authenticate": resp.headers.get("www-authenticate"),
-            "location": resp.headers.get("location"),
-        },
     }
 
 

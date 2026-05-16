@@ -181,6 +181,46 @@ def test_resolve_team_id_uses_team_list_response(monkeypatch):
     server._TEAM_ID_CACHE.clear()
 
 
+def test_request_json_returns_compact_response(monkeypatch):
+    from blawx_mcp import server
+
+    class FakeResponse:
+        status_code = 204
+        is_success = True
+        headers = {"content-type": "application/json", "location": "/unused"}
+
+        def json(self):
+            return {}
+
+    class FakeClient:
+        def __init__(self, timeout):
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def request(self, *args, **kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr(server.httpx, "AsyncClient", FakeClient)
+
+    async def run():
+        return await server._request_json(
+            method="PUT",
+            url="https://example.test/api",
+            api_key="key",
+            json_body={"large": "request"},
+            params={"debug": "nope"},
+        )
+
+    result = asyncio.run(run())
+
+    assert result == {"status_code": 204, "ok": True, "body": {}}
+
+
 def test_project_scoped_tools_require_team_slug():
     """Project-scoped public tools should expose team_slug explicitly."""
     from blawx_mcp import server
