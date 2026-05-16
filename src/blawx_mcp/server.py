@@ -90,8 +90,8 @@ mcp = NoDuplicateStructuredFastMCP(
 )
 
 
-@mcp.tool()
-async def blawx_encoding_guide(topic: str = "quickstart") -> dict[str, Any]:
+@mcp.tool(structured_output=False)
+async def blawx_encoding_guide(topic: str = "quickstart") -> str:
     """Read this first before project-scoped encoding work.
 
     Use this tool before project-scoped legal-doc, encoding, ontology, question,
@@ -107,22 +107,27 @@ async def blawx_encoding_guide(topic: str = "quickstart") -> dict[str, Any]:
     a `team_slug` and `project_id` discovered with `blawx_teams_list` and
     `blawx_projects_list`.
 
-    Topics: quickstart | blawx-json | valid-blawx-json | blawx-blocks | encodingpart | encoding-process | encoding-examples | ontology | legaldocs | scasp | all
+    Topics: quickstart | list | blawx-json | valid-blawx-json | blawx-blocks | encodingpart | encoding-process | encoding-examples | ontology | legaldocs | scasp | all
     """
 
-    available_topics = [
-        "quickstart",
-        "blawx-json",
-        "valid-blawx-json",
-        "blawx-blocks",
-        "encodingpart",
-        "encoding-process",
-        "encoding-examples",
-        "ontology",
-        "legaldocs",
-        "scasp",
-        "all",
-    ]
+    topic_summaries = {
+        "quickstart": "Start here. Explains team/project discovery, required IDs, and the first guide topics to read.",
+        "list": "Lists guide topics and summarizes what each one covers.",
+        "encoding-process": "Canonical end-to-end workflow for choosing legal text, checking ontology support, encoding, and testing.",
+        "encodingpart": "Write-contract details for encoding parts, including the required `blawx_json` payload shape.",
+        "blawx-json": "High-level Blawx JSON workspace rules and common encoding constraints.",
+        "blawx-blocks": "Reference for block types, inputs, fields, value blocks, and common block structures.",
+        "valid-blawx-json": "Concrete valid Blawx JSON examples and validation-oriented patterns.",
+        "encoding-examples": "Worked encoding examples for common legal-rule patterns.",
+        "ontology": "Ontology categories, relationships, parameters, NLG fields, and ontology write payloads.",
+        "legaldocs": "LegalDoc and LegalDocPart structure, hierarchy, granularity, and edit-field behavior.",
+        "scasp": "s(CASP) guidance for generated logic, predicates, and explanation-oriented patterns.",
+        "all": "All guide content in one response. Large; prefer targeted topics unless you need everything.",
+    }
+
+    topic_list = "# Guide Topics\n\n" + "\n".join(
+        f"- `{name}`: {summary}" for name, summary in topic_summaries.items()
+    )
 
     normalized = topic.strip().lower()
     guides = {
@@ -153,9 +158,12 @@ async def blawx_encoding_guide(topic: str = "quickstart") -> dict[str, Any]:
         "Do not send `content`, `scasp_encoding`, or stringified JSON.\n"
         "If ontology terms are unclear, read `ontology` before writing blocks."
     )
+    quickstart = f"{quickstart}\n\n{topic_list}"
 
     if normalized == "quickstart":
         selected = quickstart
+    elif normalized == "list":
+        selected = topic_list
     elif normalized == "all":
         selected = (
             "# Mandatory First Step\n"
@@ -188,19 +196,9 @@ async def blawx_encoding_guide(topic: str = "quickstart") -> dict[str, Any]:
     elif normalized in guides:
         selected = guides[normalized]
     else:
-        return {
-            "ok": False,
-            "error": "Unknown topic",
-            "requested_topic": topic,
-            "available_topics": available_topics,
-        }
+        return f"Unknown guide topic `{topic}`. Use topic `quickstart` to begin or `list` to see available guide topics."
 
-    return {
-        "ok": True,
-        "topic": normalized,
-        "guidance_markdown": selected,
-        "available_topics": available_topics,
-    }
+    return selected
 
 
 async def _request_body(

@@ -177,10 +177,13 @@ def test_mcp_tools_keep_structured_output_schemas():
     from blawx_mcp import server
 
     for name, tool in server.mcp._tool_manager._tools.items():
-        assert tool.fn_metadata.output_schema is not None, name
+        if name == "blawx_encoding_guide":
+            assert tool.fn_metadata.output_schema is None, name
+        else:
+            assert tool.fn_metadata.output_schema is not None, name
 
 
-def test_encoding_guide_structured_output_is_not_duplicated_as_text():
+def test_encoding_guide_returns_content_only():
     from blawx_mcp import server
 
     async def run():
@@ -188,6 +191,36 @@ def test_encoding_guide_structured_output_is_not_duplicated_as_text():
 
     converted = asyncio.run(run())
 
-    assert converted.content == []
-    assert converted.structuredContent is not None
-    assert "# Blawx ontology guidance" in converted.structuredContent["guidance_markdown"]
+    assert isinstance(converted, list)
+    assert len(converted) == 1
+    assert "# Blawx ontology guidance" in converted[0].text
+
+
+def test_encoding_guide_list_and_quickstart_topics():
+    from blawx_mcp import server
+
+    async def run(topic):
+        return await server.mcp.call_tool("blawx_encoding_guide", {"topic": topic})
+
+    listed = asyncio.run(run("list"))[0].text
+    quickstart = asyncio.run(run("quickstart"))[0].text
+    default = asyncio.run(server.mcp.call_tool("blawx_encoding_guide", {}))[0].text
+
+    assert "# Guide Topics" in listed
+    assert "`ontology`:" in listed
+    assert "# Guide Topics" in quickstart
+    assert "First call `blawx_teams_list`" in default
+    assert "# Guide Topics" in default
+
+
+def test_encoding_guide_invalid_topic_points_to_quickstart_or_list():
+    from blawx_mcp import server
+
+    async def run():
+        return await server.mcp.call_tool("blawx_encoding_guide", {"topic": "bogus"})
+
+    converted = asyncio.run(run())
+
+    assert "Unknown guide topic `bogus`" in converted[0].text
+    assert "quickstart" in converted[0].text
+    assert "list" in converted[0].text
