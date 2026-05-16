@@ -1434,9 +1434,10 @@ async def blawx_legaldocs_list(team_slug: str, project_id: int) -> dict[str, Any
     `team_slug` should be selected with `blawx_teams_list`; `project_id` should
     be selected with `blawx_projects_list`.
 
-    This returns document-level metadata. To read legislation text, then call:
-    1) `blawx_legaldocparts_list` for the chosen legal doc
-    2) `blawx_legaldocpart_detail` for each relevant part
+    This returns document-level metadata. To read legislation text, call
+    `blawx_legaldocparts_list` for the chosen legal doc. Use
+    `blawx_legaldocpart_detail` for full fields, content-in-context, pincite, or
+    encoding_part_id for a selected part.
     """
 
     result = await _project_request_json(
@@ -1450,8 +1451,8 @@ async def blawx_legaldocs_list(team_slug: str, project_id: int) -> dict[str, Any
         **result,
         "workflow_hint": (
             "This tool is project-scoped; choose `team_slug` with blawx_teams_list, then obtain `project_id` from blawx_projects_list. "
-            "This is a document list. To read legal text, call blawx_legaldocparts_list for a legal_doc_id, "
-            "then call blawx_legaldocpart_detail for the relevant part(s). For structure and write fields, "
+            "This is a document list. To read legal text, call blawx_legaldocparts_list for a legal_doc_id. "
+            "Use blawx_legaldocpart_detail for full fields, content-in-context, pincite, or encoding_part_id. For structure and write fields, "
             "read blawx_encoding_guide topic 'legaldocs'."
         ),
         "next_recommended_tool": "blawx_legaldocparts_list",
@@ -1490,8 +1491,9 @@ async def blawx_legaldoc_detail(team_slug: str, project_id: int, legal_doc_id: i
     """Get a legal doc by id.
 
     This returns document-level metadata. To read the legislative text itself,
-    list parts with `blawx_legaldocparts_list` and then fetch part text with
-    `blawx_legaldocpart_detail`.
+    use the Markdown outline from `blawx_legaldocparts_list`. Use
+    `blawx_legaldocpart_detail` for full fields, content-in-context, pincite, or
+    encoding_part_id for a selected part.
     """
 
     result = await _project_request_json(
@@ -1505,7 +1507,7 @@ async def blawx_legaldoc_detail(team_slug: str, project_id: int, legal_doc_id: i
         **result,
         "workflow_hint": (
             "This is legal-doc metadata. To read legal text, call blawx_legaldocparts_list "
-            "for this legal_doc_id, then call blawx_legaldocpart_detail for relevant part ids. "
+            "for this legal_doc_id. Use blawx_legaldocpart_detail for full fields, content-in-context, pincite, or encoding_part_id. "
             "Read blawx_encoding_guide topic 'legaldocs' before editing document structure."
         ),
         "next_recommended_tool": "blawx_legaldocparts_list",
@@ -1544,15 +1546,16 @@ async def blawx_legaldoc_delete(team_slug: str, project_id: int, legal_doc_id: i
     )
 
 
-@mcp.tool()
-async def blawx_legaldocparts_list(team_slug: str, project_id: int, legal_doc_id: int) -> dict[str, Any]:
+@mcp.tool(structured_output=False)
+async def blawx_legaldocparts_list(team_slug: str, project_id: int, legal_doc_id: int) -> str:
     """List legal doc parts as a Markdown outline.
 
     `team_slug` should be selected with `blawx_teams_list`; `project_id` should
     be selected with `blawx_projects_list`.
 
-    The API returns `body` as text/markdown. It starts with a legend, then an indented
-    hierarchy where each item is:
+    This MCP tool returns the Markdown as a text content block, not as
+    structuredContent. It starts with a legend, then an indented hierarchy where
+    each item is:
     `- <legaldocpart_id> [<encodingpart_id> <marker>] <index> <text>`.
 
     Marker `!` means an encoding part exists and has content. Marker `.` means an
@@ -1571,18 +1574,14 @@ async def blawx_legaldocparts_list(team_slug: str, project_id: int, legal_doc_id
         api_path=f"legaldocs/{legal_doc_id}/parts/",
         timeout_seconds=30.0,
     )
-    return {
-        **result,
-        "workflow_hint": (
-            "This tool is project-scoped; choose `team_slug` with blawx_teams_list, then obtain `project_id` from blawx_projects_list. "
-            "The response body is a Markdown outline of the document hierarchy. Each item includes a legal_doc_part_id, "
-            "optional encodingpart_id plus marker (`!` has content, `.` empty), and short index/text content; "
-            "non-substantive parts are bolded. Use blawx_legaldocpart_detail for full fields, content-in-context, "
-            "and pincite for a selected part. Use blawx_legaldocpart_create to add a new part, and default to one "
-            "part per heading, section, subsection, paragraph, or similar legislative unit with distinct text."
-        ),
-        "next_recommended_tool": "blawx_legaldocpart_detail",
-    }
+    body = result.get("body")
+    if result.get("ok"):
+        return body if isinstance(body, str) else str(body)
+
+    return (
+        f"Failed to list legal doc parts for legal_doc_id `{legal_doc_id}` "
+        f"(status {result.get('status_code')}).\n\n{body}"
+    )
 
 
 @mcp.tool()

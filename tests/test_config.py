@@ -216,7 +216,7 @@ def test_mcp_tools_keep_structured_output_schemas():
     from blawx_mcp import server
 
     for name, tool in server.mcp._tool_manager._tools.items():
-        if name == "blawx_encoding_guide":
+        if name in {"blawx_encoding_guide", "blawx_legaldocparts_list"}:
             assert tool.fn_metadata.output_schema is None, name
         else:
             assert tool.fn_metadata.output_schema is not None, name
@@ -233,6 +233,32 @@ def test_encoding_guide_returns_content_only():
     assert isinstance(converted, list)
     assert len(converted) == 1
     assert "# Blawx ontology guidance" in converted[0].text
+
+
+def test_legaldocparts_list_returns_markdown_content_only(monkeypatch):
+    from blawx_mcp import server
+
+    markdown = (
+        "Legend: each item is `- <legaldocpart_id> [<encodingpart_id> <marker>] <index> <text>`.\n\n"
+        "- 10 20 ! Section text\n"
+    )
+
+    async def fake_project_request_json(**kwargs):
+        return {"status_code": 200, "ok": True, "body": markdown}
+
+    monkeypatch.setattr(server, "_project_request_json", fake_project_request_json)
+
+    async def run():
+        return await server.mcp.call_tool(
+            "blawx_legaldocparts_list",
+            {"team_slug": "team", "project_id": 1, "legal_doc_id": 2},
+        )
+
+    converted = asyncio.run(run())
+
+    assert isinstance(converted, list)
+    assert len(converted) == 1
+    assert converted[0].text == markdown
 
 
 def test_structured_tools_use_fastmcp_default_duplicate_output():

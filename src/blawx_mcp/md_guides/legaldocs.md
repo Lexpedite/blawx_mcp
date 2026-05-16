@@ -50,8 +50,9 @@ Explicit exception:
 ## What list tools return
 
 - `blawx_legaldocs_list` returns document metadata, not the legal text.
-- `blawx_legaldocparts_list` returns a Markdown outline of the document hierarchy.
-  It starts with a legend, then one line per part in the shape
+- `blawx_legaldocparts_list` returns a Markdown outline of the document hierarchy
+  as an MCP text content block, not structured data. It starts with a legend,
+  then one line per part in the shape
   `- <legaldocpart_id> [<encodingpart_id> <marker>] <index> <text>`.
 - In the parts outline, marker `!` means an encoding part exists and has content;
   marker `.` means an encoding part exists but is empty. If no encoding part

@@ -313,7 +313,7 @@ For the full LegalDocPart structure guidance, including `parent_id`, `include_pa
 1. `blawx_teams_list` to choose a `team_slug`.
 2. `blawx_projects_list` to choose a `project_id`.
 3. `blawx_legaldocs_list` (or `blawx_legaldoc_detail`) to identify a `legal_doc_id`.
-4. `blawx_legaldocparts_list` to read the Markdown outline for that document. The outline includes part IDs, optional encoding IDs and markers, hierarchy indentation, index text, and short part text.
+4. `blawx_legaldocparts_list` to read the Markdown outline for that document. This MCP tool returns the outline as a text content block, not structured data. The outline includes part IDs, optional encoding IDs and markers, hierarchy indentation, index text, and short part text.
 5. `blawx_legaldocpart_detail` for each relevant `legal_doc_part_id` when you need full fields, content-in-context, pincite, or `encoding_part_id`. Detail responses do not include `parent_id`, `path`, `depth`, or `numchild`; use the parts outline for hierarchy.
 
 In the parts outline, each item follows `- <legaldocpart_id> [<encodingpart_id> <marker>] <index> <text>`. Marker `!` means the encoding part has content; marker `.` means it exists but is empty. Non-substantive legal document part content is bolded.

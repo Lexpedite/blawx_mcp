@@ -30,7 +30,7 @@ encode them separately.
 - Legal text navigation/write tools: `blawx_legaldocs_list`, `blawx_legaldocparts_list`, `blawx_legaldocpart_detail`, `blawx_legaldoc_create`, `blawx_legaldoc_update`, `blawx_legaldoc_delete`, `blawx_legaldocpart_create`, `blawx_legaldocpart_update`, `blawx_legaldocpart_delete`.
 
 Important: `blawx_legaldocparts_list` returns a Markdown outline of the legal
-document hierarchy. Each line includes a `legal_doc_part_id`, optional
+document hierarchy as an MCP text content block, not structured data. Each line includes a `legal_doc_part_id`, optional
 `encodingpart_id` plus marker (`!` has content, `.` empty), index text, and short
 part text. Use it to choose the right part and see nearby structure. Use
 `blawx_legaldocpart_detail` when you need full fields, `content_in_context`, or
