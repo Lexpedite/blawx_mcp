@@ -1546,13 +1546,22 @@ async def blawx_legaldoc_delete(team_slug: str, project_id: int, legal_doc_id: i
 
 @mcp.tool()
 async def blawx_legaldocparts_list(team_slug: str, project_id: int, legal_doc_id: int) -> dict[str, Any]:
-    """List parts for a legal doc.
+    """List legal doc parts as a Markdown outline.
 
     `team_slug` should be selected with `blawx_teams_list`; `project_id` should
     be selected with `blawx_projects_list`.
 
-    This list is mainly navigational metadata (part ids/titles/order). To view the
-    actual legislation text for a part, call `blawx_legaldocpart_detail` for that part id.
+    The API returns `body` as text/markdown. It starts with a legend, then an indented
+    hierarchy where each item is:
+    `- <legaldocpart_id> [<encodingpart_id> <marker>] <index> <text>`.
+
+    Marker `!` means an encoding part exists and has content. Marker `.` means an
+    encoding part exists but is empty. If no encoding part exists, the encoding ID
+    and marker are omitted. Non-substantive legal doc part text is bolded.
+
+    Use this outline to choose part IDs and see short part text in context. Use
+    `blawx_legaldocpart_detail` when you need the full part fields, content-in-context,
+    or pincite for a specific part.
     """
 
     result = await _project_request_json(
@@ -1566,9 +1575,11 @@ async def blawx_legaldocparts_list(team_slug: str, project_id: int, legal_doc_id
         **result,
         "workflow_hint": (
             "This tool is project-scoped; choose `team_slug` with blawx_teams_list, then obtain `project_id` from blawx_projects_list. "
-            "This is a parts list. To read the actual text, call blawx_legaldocpart_detail for each relevant "
-            "legal_doc_part_id. Use blawx_legaldocpart_create to add a new part, and default to one part per "
-            "heading, section, subsection, paragraph, or similar legislative unit with distinct text."
+            "The response body is a Markdown outline of the document hierarchy. Each item includes a legal_doc_part_id, "
+            "optional encodingpart_id plus marker (`!` has content, `.` empty), and short index/text content; "
+            "non-substantive parts are bolded. Use blawx_legaldocpart_detail for full fields, content-in-context, "
+            "and pincite for a selected part. Use blawx_legaldocpart_create to add a new part, and default to one "
+            "part per heading, section, subsection, paragraph, or similar legislative unit with distinct text."
         ),
         "next_recommended_tool": "blawx_legaldocpart_detail",
     }

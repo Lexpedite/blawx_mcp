@@ -50,8 +50,16 @@ Explicit exception:
 ## What list tools return
 
 - `blawx_legaldocs_list` returns document metadata, not the legal text.
-- `blawx_legaldocparts_list` returns navigational metadata such as `id`, `parent_id`, `path`, `depth`, `element_type`, and `index_text`.
-- `blawx_legaldocpart_detail` returns the actual part content and context fields.
+- `blawx_legaldocparts_list` returns a Markdown outline of the document hierarchy.
+  It starts with a legend, then one line per part in the shape
+  `- <legaldocpart_id> [<encodingpart_id> <marker>] <index> <text>`.
+- In the parts outline, marker `!` means an encoding part exists and has content;
+  marker `.` means an encoding part exists but is empty. If no encoding part
+  exists, the encoding ID and marker are omitted. Non-substantive part content is
+  bolded.
+- Use `blawx_legaldocparts_list` to choose part IDs and see short legal text in
+  hierarchy context. Use `blawx_legaldocpart_detail` when you need the full part
+  fields, `content_in_context`, or `pincite`.
 
 ## LegalDoc write contract
 
