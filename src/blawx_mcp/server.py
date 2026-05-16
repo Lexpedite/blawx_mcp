@@ -10,7 +10,6 @@ from urllib.parse import urljoin
 
 import httpx
 from mcp.server.fastmcp import FastMCP
-from mcp.types import CallToolResult
 
 from .config import get_settings
 from .guides import (
@@ -38,31 +37,6 @@ _TEAM_ID_CACHE: dict[tuple[str, str], int] = {}
 _PROJECT_ID_ERROR = "project_id must be a positive integer. Discover valid ids with blawx_projects_list."
 
 
-class NoDuplicateStructuredFastMCP(FastMCP):
-    """FastMCP variant that keeps structured output without duplicating it as text."""
-
-    async def call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
-        context = self.get_context()
-        tool = self._tool_manager.get_tool(name)
-        if not tool:
-            return await super().call_tool(name, arguments)
-
-        result = await tool.run(arguments, context=context, convert_result=False)
-        if isinstance(result, CallToolResult):
-            return tool.fn_metadata.convert_result(result)
-
-        if tool.fn_metadata.output_schema is None:
-            return tool.fn_metadata.convert_result(result)
-
-        if tool.fn_metadata.wrap_output:
-            result = {"result": result}
-
-        assert tool.fn_metadata.output_model is not None
-        validated = tool.fn_metadata.output_model.model_validate(result)
-        structured_content = validated.model_dump(mode="json", by_alias=True)
-        return CallToolResult(content=[], structuredContent=structured_content)
-
-
 def _env_int(name: str, default: int) -> int:
     raw = os.environ.get(name)
     if raw is None or not raw.strip():
@@ -82,7 +56,7 @@ def _get_mcp_bind_settings() -> tuple[str, int]:
 _host, _port = _get_mcp_bind_settings()
 _log_level = os.environ.get("BLAWX_MCP_LOG_LEVEL", "INFO").upper()
 
-mcp = NoDuplicateStructuredFastMCP(
+mcp = FastMCP(
     "blawx-mcp",
     host=_host,
     port=_port,

@@ -196,6 +196,20 @@ def test_encoding_guide_returns_content_only():
     assert "# Blawx ontology guidance" in converted[0].text
 
 
+def test_structured_tools_use_fastmcp_default_duplicate_output():
+    from blawx_mcp import server
+
+    tool = server.mcp._tool_manager._tools["blawx_health"]
+
+    converted = tool.fn_metadata.convert_result({"ok": True})
+
+    assert isinstance(converted, tuple)
+    content, structured = converted
+    assert len(content) == 1
+    assert '"ok"' in content[0].text
+    assert structured["ok"] is True
+
+
 def test_encoding_guide_list_and_quickstart_topics():
     from blawx_mcp import server
 
