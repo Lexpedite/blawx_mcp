@@ -149,9 +149,9 @@ Agents will then usually list the available questions, fact scenarios, and vocab
 - `blawx_question_detail`: retrieves a specific question's details (useful when deciding which question id to ask).
 - `blawx_fact_scenarios_list`: lists stored fact scenarios (prebuilt sets of facts you can re-use).
 - `blawx_fact_scenario_detail`: shows the facts contained in a specific fact scenario.
-- `blawx_ontology_list`: lists ontology categories/relationships (the project's vocabulary).
-- `blawx_ontology_category_detail`: details for a specific category.
-- `blawx_ontology_relationship_detail`: details for a specific relationship (including arity/parameters).
+- `blawx_ontology_list`: primary ontology discovery tool; lists categories, relationships, and relationship parameters with the details needed for encoding.
+- `blawx_ontology_category_detail`: focused lookup for one category already present in `blawx_ontology_list`.
+- `blawx_ontology_relationship_detail`: focused lookup for one relationship already present in `blawx_ontology_list`, including the same arity/parameter information.
 
 Additional read-write tools are also available for project editing (questions, fact scenarios, ontology categories/relationships/parameters).
 
@@ -198,7 +198,8 @@ For question saves specifically, the encoding is expected to include a single ou
 		"slug": "contract",
 		"short_description": "",
 		"nlg_prefix": "",
-		"nlg_postfix": "is a contract"
+		"nlg_postfix": "is a contract",
+		"nlg_pattern": "{1} is a contract"
 	}
 }
 ```
@@ -209,7 +210,8 @@ For question saves specifically, the encoding is expected to include a single ou
 		"name": "Estimated Expenditure",
 		"slug": "estimated_expenditure",
 		"short_description": "",
-		"nlg_prefix": ""
+		"nlg_prefix": "",
+		"nlg_pattern": "{1}'s estimated expenditure is {2}"
 	}
 }
 ```
@@ -229,8 +231,9 @@ Notes:
 
 - Category create/update currently requires `name` and `slug`; `nlg_postfix` must be 50 characters or fewer.
 - Relationship create/update currently requires `name` and `slug`.
+- `nlg_pattern` on categories and relationships illustrates how statements using that predicate appear in the coding interface and natural language explanations.
 - Relationship-parameter create/update currently requires `order` and `type_id`.
-- Use `blawx_ontology_categories_list` or `blawx_ontology_category_detail` to discover valid category ids for `type_id`.
+- Use `blawx_ontology_list` or `blawx_ontology_category_detail` to discover valid category ids for `type_id`.
 
 Patch-style tools are intentionally not exposed in this MCP server to reduce tool-selection ambiguity.
 

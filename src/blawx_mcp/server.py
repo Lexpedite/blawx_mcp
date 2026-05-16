@@ -631,10 +631,15 @@ async def blawx_projects_list(team_slug: str) -> dict[str, Any]:
 
 @mcp.tool()
 async def blawx_ontology_list(team_slug: str, project_id: int) -> dict[str, Any]:
-    """List ontology (available categories and relationships).
+    """List the full ontology: categories, relationships, and relationship parameters.
 
     `team_slug` should be selected with `blawx_teams_list`; `project_id` should
     be selected with `blawx_projects_list`.
+
+    Use this as the primary ontology discovery tool. It includes the details
+    agents usually need for encoding, including category ids/slugs and
+    relationship arity/parameters. Category and relationship detail tools are
+    focused lookups for a single element already present in this list.
     """
     result = await _project_request_json(
         method="GET",
@@ -647,26 +652,11 @@ async def blawx_ontology_list(team_slug: str, project_id: int) -> dict[str, Any]
         **result,
         "workflow_hint": (
             "This tool is project-scoped. Obtain `project_id` from blawx_projects_list first, "
-            "then use category/relationship detail tools for specific ids from this list."
+            "Use this as the primary ontology discovery result; it includes the category and relationship "
+            "details needed for encoding. Use category/relationship detail tools only when you want the same "
+            "information focused on one specific id from this list."
         ),
-        "next_recommended_tool": "blawx_ontology_category_detail",
     }
-
-
-@mcp.tool()
-async def blawx_ontology_categories_list(team_slug: str, project_id: int) -> dict[str, Any]:
-    """List ontology categories.
-
-    This endpoint is read-write in the API (create/update/delete are also supported).
-    """
-
-    return await _project_request_json(
-        method="GET",
-        project_id=project_id,
-        team_slug=team_slug,
-        api_path="ontology/categories/",
-        timeout_seconds=30.0,
-    )
 
 
 @mcp.tool()
@@ -682,10 +672,12 @@ async def blawx_ontology_category_create(team_slug: str, project_id: int, payloa
             "slug": "contract",
             "short_description": "",
             "nlg_prefix": "",
-            "nlg_postfix": "is a contract"
+            "nlg_postfix": "is a contract",
+            "nlg_pattern": "{1} is a contract"
         }
 
         `nlg_postfix` is currently limited to 50 characters by the Blawx API.
+        `nlg_pattern` illustrates coding-interface and explanation display text.
     """
 
     return await _project_request_json(
@@ -727,7 +719,10 @@ async def blawx_ontology_category_delete(team_slug: str, project_id: int, catego
 
 @mcp.tool()
 async def blawx_ontology_category_detail(team_slug: str, project_id: int, category_id: int) -> dict[str, Any]:
-    """Get category details by id obtained from blawx_ontology_list tool.
+    """Get one category by id from blawx_ontology_list.
+
+    `blawx_ontology_list` already includes category details. Use this only when
+    you want the same information focused on a single category.
     """
     return await _project_request_json(
         method="GET",
@@ -740,26 +735,17 @@ async def blawx_ontology_category_detail(team_slug: str, project_id: int, catego
 
 @mcp.tool()
 async def blawx_ontology_relationship_detail(team_slug: str, project_id: int, relationship_id: int) -> dict[str, Any]:
-    """Get relationship details by id obtained from blawx_ontology_list tool.
+    """Get one relationship by id from blawx_ontology_list.
+
+    `blawx_ontology_list` already includes relationship details and parameters.
+    Use this only when you want the same information focused on a single
+    relationship.
     """
     return await _project_request_json(
         method="GET",
         project_id=project_id,
         team_slug=team_slug,
         api_path=f"ontology/relationships/{relationship_id}/",
-        timeout_seconds=30.0,
-    )
-
-
-@mcp.tool()
-async def blawx_ontology_relationships_list(team_slug: str, project_id: int) -> dict[str, Any]:
-    """List ontology relationships."""
-
-    return await _project_request_json(
-        method="GET",
-        project_id=project_id,
-        team_slug=team_slug,
-        api_path="ontology/relationships/",
         timeout_seconds=30.0,
     )
 
@@ -776,8 +762,11 @@ async def blawx_ontology_relationship_create(team_slug: str, project_id: int, pa
       "name": "Estimated Expenditure",
       "slug": "estimated_expenditure",
       "short_description": "",
-      "nlg_prefix": ""
+      "nlg_prefix": "",
+      "nlg_pattern": "{1}'s estimated expenditure is {2}"
     }
+
+    `nlg_pattern` illustrates coding-interface and explanation display text.
     """
 
     return await _project_request_json(
@@ -813,19 +802,6 @@ async def blawx_ontology_relationship_delete(team_slug: str, project_id: int, re
         project_id=project_id,
         team_slug=team_slug,
         api_path=f"ontology/relationships/{relationship_id}/",
-        timeout_seconds=30.0,
-    )
-
-
-@mcp.tool()
-async def blawx_ontology_relationship_parameters_list(team_slug: str, project_id: int, relationship_id: int) -> dict[str, Any]:
-    """List parameters for a relationship."""
-
-    return await _project_request_json(
-        method="GET",
-        project_id=project_id,
-        team_slug=team_slug,
-        api_path=f"ontology/relationships/{relationship_id}/parameters/",
         timeout_seconds=30.0,
     )
 
@@ -870,19 +846,6 @@ async def blawx_ontology_relationship_parameter_update(
         team_slug=team_slug,
         api_path=f"ontology/relationships/{relationship_id}/parameters/{parameter_id}/",
         json_body=payload,
-        timeout_seconds=30.0,
-    )
-
-
-@mcp.tool()
-async def blawx_ontology_relationship_parameter_detail(team_slug: str, project_id: int, relationship_id: int, parameter_id: int) -> dict[str, Any]:
-    """Get a relationship parameter definition by id."""
-
-    return await _project_request_json(
-        method="GET",
-        project_id=project_id,
-        team_slug=team_slug,
-        api_path=f"ontology/relationships/{relationship_id}/parameters/{parameter_id}/",
         timeout_seconds=30.0,
     )
 

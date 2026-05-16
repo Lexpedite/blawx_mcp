@@ -10,7 +10,7 @@ Use this guide first, then follow the referenced specialized guides at each step
 - Project discovery: `blawx_projects_list`
 - Legal text discovery: `blawx_legaldocs_list`, `blawx_legaldocparts_list`, `blawx_legaldocpart_detail`
 - Existing encoding: `blawx_encodingpart_get`
-- Ontology inspection/update: `blawx_ontology_list`, `blawx_ontology_category_detail`, `blawx_ontology_relationship_detail`, and related ontology write tools if needed
+- Ontology inspection/update: `blawx_ontology_list` first; use `blawx_ontology_category_detail` or `blawx_ontology_relationship_detail` only for a focused lookup of one listed element; use related ontology write tools if needed
 - Test setup: `blawx_questions_list`, `blawx_question_detail`, fact-scenario tools, and related write tools if needed
 - Test execution and analysis: ask tools, `blawx_list_answers`, explanation-part tools
 - Encoding write: `blawx_encodingpart_update`

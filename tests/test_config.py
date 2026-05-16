@@ -246,6 +246,15 @@ def test_discovery_tool_signatures():
     assert not hasattr(server, "blawx_project_detail")
 
 
+def test_removed_redundant_ontology_parameter_read_tools():
+    from blawx_mcp import server
+
+    assert not hasattr(server, "blawx_ontology_categories_list")
+    assert not hasattr(server, "blawx_ontology_relationships_list")
+    assert not hasattr(server, "blawx_ontology_relationship_parameters_list")
+    assert not hasattr(server, "blawx_ontology_relationship_parameter_detail")
+
+
 def test_settings_has_no_team_slug():
     signature = inspect.signature(Settings)
 
