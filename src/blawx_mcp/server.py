@@ -1627,7 +1627,11 @@ async def blawx_legaldocpart_create(
 async def blawx_legaldocpart_detail(team_slug: str, project_id: int, legal_doc_id: int, legal_doc_part_id: int) -> dict[str, Any]:
     """Get a single legal doc part by id.
 
-    Use this tool to view the actual text/content for a legal doc part.
+    Use this tool to view the full fields for a legal doc part, including
+    `text_content`, `content_in_context`, `pincite`, and `encoding_part_id`.
+    Tree-navigation fields (`parent_id`, `path`, `depth`, and `numchild`) are not
+    returned by this detail endpoint; use `blawx_legaldocparts_list` for the
+    Markdown hierarchy outline.
     """
 
     result = await _project_request_json(
@@ -1640,7 +1644,9 @@ async def blawx_legaldocpart_detail(team_slug: str, project_id: int, legal_doc_i
     return {
         **result,
         "workflow_hint": (
-            "This tool returns the part detail, including the legal text/content when present. "
+            "This tool returns the part detail, including legal text/content, content_in_context, pincite, "
+            "and encoding_part_id when present. It does not return parent_id, path, depth, or numchild; "
+            "use blawx_legaldocparts_list for the document hierarchy outline. "
             "For create/update field behavior, read blawx_encoding_guide topic 'legaldocs'."
         ),
     }

@@ -34,7 +34,9 @@ document hierarchy. Each line includes a `legal_doc_part_id`, optional
 `encodingpart_id` plus marker (`!` has content, `.` empty), index text, and short
 part text. Use it to choose the right part and see nearby structure. Use
 `blawx_legaldocpart_detail` when you need full fields, `content_in_context`, or
-`pincite`.
+`pincite`, or when you need to check `encoding_part_id`. Detail responses do not
+include `parent_id`, `path`, `depth`, or `numchild`; use the Markdown outline for
+hierarchy.
 
 ## Important: what the write tools accept
 
