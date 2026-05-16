@@ -141,7 +141,6 @@ Agents should start by listing teams, then listing projects under the selected t
 
 - `blawx_teams_list`: lists the teams available to the configured API key.
 - `blawx_projects_list`: lists the available projects for a `team_slug`.
-- `blawx_project_detail`: retrieves metadata for a specific project id.
 
 Once a team and project are chosen, every project-scoped tool requires explicit `team_slug` and `project_id` arguments.
 Agents will then usually list the available questions, fact scenarios, and vocabulary.

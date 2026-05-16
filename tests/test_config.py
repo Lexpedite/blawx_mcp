@@ -203,6 +203,7 @@ def test_discovery_tool_signatures():
 
     assert "team_slug" not in teams_signature.parameters
     assert list(projects_signature.parameters) == ["team_slug"]
+    assert not hasattr(server, "blawx_project_detail")
 
 
 def test_settings_has_no_team_slug():

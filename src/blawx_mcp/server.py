@@ -628,27 +628,11 @@ async def blawx_projects_list(team_slug: str) -> dict[str, Any]:
         "workflow_hint": (
             "After choosing `team_slug` with blawx_teams_list, pick a project id from this list and pass it as `project_id` "
             "to every downstream project-scoped tool together with this `team_slug`. Only "
-            "blawx_health, blawx_teams_list, and blawx_encoding_guide do not require both."
+            "blawx_health, blawx_teams_list, and blawx_encoding_guide do not require both. "
+            "Next, list the project content you need, such as questions, fact scenarios, ontology, or legal docs."
         ),
-        "next_recommended_tool": "blawx_project_detail",
+        "next_recommended_tool": "blawx_questions_list",
     }
-
-
-@mcp.tool()
-async def blawx_project_detail(team_slug: str, project_id: int) -> dict[str, Any]:
-    """Get metadata for a single project id obtained from blawx_projects_list.
-
-    `team_slug` should be selected with `blawx_teams_list`; `project_id` should
-    be selected with `blawx_projects_list`.
-    """
-
-    return await _project_request_json(
-        method="GET",
-        project_id=project_id,
-        team_slug=team_slug,
-        api_path="",
-        timeout_seconds=30.0,
-    )
 
 
 @mcp.tool()
