@@ -240,9 +240,11 @@ def test_discovery_tool_signatures():
 
     teams_signature = inspect.signature(server.blawx_teams_list)
     projects_signature = inspect.signature(server.blawx_projects_list)
+    declared_objects_signature = inspect.signature(server.blawx_declared_objects_list)
 
     assert "team_slug" not in teams_signature.parameters
     assert list(projects_signature.parameters) == ["team_slug"]
+    assert list(declared_objects_signature.parameters) == ["team_slug", "project_id"]
     assert not hasattr(server, "blawx_project_detail")
 
 

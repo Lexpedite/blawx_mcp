@@ -623,9 +623,36 @@ async def blawx_projects_list(team_slug: str) -> dict[str, Any]:
             "After choosing `team_slug` with blawx_teams_list, pick a project id from this list and pass it as `project_id` "
             "to every downstream project-scoped tool together with this `team_slug`. Only "
             "blawx_health, blawx_teams_list, and blawx_encoding_guide do not require both. "
-            "Next, list the project content you need, such as questions, fact scenarios, ontology, or legal docs."
+            "Next, list the project content you need, such as declared objects, questions, fact scenarios, ontology, or legal docs."
         ),
-        "next_recommended_tool": "blawx_questions_list",
+        "next_recommended_tool": "blawx_declared_objects_list",
+    }
+
+
+@mcp.tool()
+async def blawx_declared_objects_list(team_slug: str, project_id: int) -> dict[str, Any]:
+    """List objects declared across the project's encoding parts.
+
+    `team_slug` should be selected with `blawx_teams_list`; `project_id` should
+    be selected with `blawx_projects_list`.
+
+    Use this before creating fact scenarios, questions, or encoding parts that
+    refer to entities. It helps you reuse existing declared objects and avoid
+    creating duplicate or conflicting object declarations.
+    """
+    result = await _project_request_json(
+        method="GET",
+        project_id=project_id,
+        team_slug=team_slug,
+        api_path="declared-objects/",
+        timeout_seconds=30.0,
+    )
+    return {
+        **result,
+        "workflow_hint": (
+            "Use these declared objects before writing facts, questions, or encoding parts that refer to entities. "
+            "If the needed entity already exists, reuse its declared object name instead of creating a duplicate."
+        ),
     }
 
 

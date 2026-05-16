@@ -124,7 +124,7 @@ All project-scoped tools require both `team_slug` and `project_id`. Agents shoul
 
 1. Discover teams and choose a `team_slug`.
 2. Discover projects under that team and choose a `project_id`.
-3. Discover what the chosen project exposes (questions, fact scenarios, ontology).
+3. Discover what the chosen project exposes (declared objects, questions, fact scenarios, ontology).
 4. Create, update, and delete LegalDocs, LegalDocParts, and EncodingParts.
 5. Ask a question (using either a stored fact scenario or a custom facts payload).
 6. Browse answers and drill into explanations (model/attributes/explanation text).
@@ -145,6 +145,7 @@ Agents should start by listing teams, then listing projects under the selected t
 Once a team and project are chosen, every project-scoped tool requires explicit `team_slug` and `project_id` arguments.
 Agents will then usually list the available questions, fact scenarios, and vocabulary.
 
+- `blawx_declared_objects_list`: lists objects declared across the project's encoding parts; use before writing fact scenarios, questions, or encodings that refer to entities.
 - `blawx_questions_list`: lists shared questions available in the project.
 - `blawx_question_detail`: retrieves a specific question's details (useful when deciding which question id to ask).
 - `blawx_fact_scenarios_list`: lists stored fact scenarios (prebuilt sets of facts you can re-use).

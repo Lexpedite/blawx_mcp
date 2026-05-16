@@ -8,6 +8,7 @@ Use this guide first, then follow the referenced specialized guides at each step
 
 - Team discovery: `blawx_teams_list`
 - Project discovery: `blawx_projects_list`
+- Declared object discovery: `blawx_declared_objects_list`
 - Legal text discovery: `blawx_legaldocs_list`, `blawx_legaldocparts_list`, `blawx_legaldocpart_detail`
 - Existing encoding: `blawx_encodingpart_get`
 - Ontology inspection/update: `blawx_ontology_list` first; use `blawx_ontology_category_detail` or `blawx_ontology_relationship_detail` only for a focused lookup of one listed element; use related ontology write tools if needed
@@ -22,6 +23,10 @@ Use this guide first, then follow the referenced specialized guides at each step
 3. Call `blawx_projects_list` with `team_slug` and choose the `project_id` you will pass to every project-scoped tool.
 4. Treat that `team_slug` and `project_id` as mandatory for all later ontology, legal-doc, question, fact-scenario, ask/answer, and encoding calls.
 5. Only `blawx_health`, `blawx_teams_list`, and `blawx_encoding_guide` can be used without both values.
+
+Before creating fact scenarios, questions, or encoding parts that refer to
+entities, call `blawx_declared_objects_list` and reuse existing declared object
+names when appropriate.
 
 ## 2) Select source sections
 
