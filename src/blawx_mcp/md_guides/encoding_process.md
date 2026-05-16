@@ -101,6 +101,10 @@ Generate the `blawx_json` blocks that implement the target logic.
 
 - Prefer explicit category-membership checks early in rule conditions.
 - Use block structures consistent with ontology arity/parameter typing.
+- For Date, Datetime, Time, and Duration parameters, use the corresponding
+  primitive value blocks (`date_value`, `datetime_value`, `time_value`,
+  `duration_value`) rather than ISO strings. The server converts those blocks to
+  timestamps internally.
 
 For block-shape and syntax rules, read guide topics: `blawx-json` and `blawx-blocks`.
 

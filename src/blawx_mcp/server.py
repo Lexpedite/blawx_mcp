@@ -10,6 +10,7 @@ from urllib.parse import urljoin
 
 import httpx
 from mcp.server.fastmcp import FastMCP
+from mcp.types import CallToolResult
 
 from .config import get_settings
 from .guides import (
@@ -37,6 +38,31 @@ _TEAM_ID_CACHE: dict[tuple[str, str], int] = {}
 _PROJECT_ID_ERROR = "project_id must be a positive integer. Discover valid ids with blawx_projects_list."
 
 
+class NoDuplicateStructuredFastMCP(FastMCP):
+    """FastMCP variant that keeps structured output without duplicating it as text."""
+
+    async def call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
+        context = self.get_context()
+        tool = self._tool_manager.get_tool(name)
+        if not tool:
+            return await super().call_tool(name, arguments)
+
+        result = await tool.run(arguments, context=context, convert_result=False)
+        if isinstance(result, CallToolResult):
+            return tool.fn_metadata.convert_result(result)
+
+        if tool.fn_metadata.output_schema is None:
+            return tool.fn_metadata.convert_result(result)
+
+        if tool.fn_metadata.wrap_output:
+            result = {"result": result}
+
+        assert tool.fn_metadata.output_model is not None
+        validated = tool.fn_metadata.output_model.model_validate(result)
+        structured_content = validated.model_dump(mode="json", by_alias=True)
+        return CallToolResult(content=[], structuredContent=structured_content)
+
+
 def _env_int(name: str, default: int) -> int:
     raw = os.environ.get(name)
     if raw is None or not raw.strip():
@@ -56,7 +82,7 @@ def _get_mcp_bind_settings() -> tuple[str, int]:
 _host, _port = _get_mcp_bind_settings()
 _log_level = os.environ.get("BLAWX_MCP_LOG_LEVEL", "INFO").upper()
 
-mcp = FastMCP(
+mcp = NoDuplicateStructuredFastMCP(
     "blawx-mcp",
     host=_host,
     port=_port,
@@ -1215,13 +1241,18 @@ async def blawx_question_ask_with_facts(team_slug: str, project_id: int, questio
     2. DATATYPE VALUES (for Number, Date, Datetime, Time, Duration categories):
         - Do NOT declare these in category facts
         - Do NOT convert to atoms
-        - Use the values directly in relationships as shown below:
+        - In Blawx JSON encodings, use primitive value blocks instead of string
+          literals: `date_value`, `datetime_value`, `time_value`, and
+          `duration_value`. The server converts date and datetime blocks to its
+          backend timestamp representation.
+        - For this structured ask-facts payload only, use the values directly in
+          relationships as shown below:
     
         Numbers: Plain integers or decimals (e.g., 10000, 3750000.50, 200000)
-        Dates: ISO 8601 format YYYY-MM-DD (e.g., "2025-01-15", "2024-12-31")
-        Times: HH:MM format (e.g., "14:30", "09:00")
-        Datetimes: ISO 8601 format YYYY-MM-DDTHH:MM (e.g., "2025-01-15T14:30", "2024-12-31T23:59")
-        Durations: ISO 8601 duration format (e.g., "P3D" for 3 days, "PT5H" for 5 hours, "P1DT2H30M" for 1 day, 2 hours, 30 minutes)
+        Dates: date strings for this fact payload only (e.g., "2025-01-15", "2024-12-31")
+        Times: time strings for this fact payload only (e.g., "14:30", "09:00")
+        Datetimes: datetime strings for this fact payload only (e.g., "2025-01-15T14:30", "2024-12-31T23:59")
+        Durations: duration strings for this fact payload only (e.g., "P3D" for 3 days, "PT5H" for 5 hours, "P1DT2H30M" for 1 day, 2 hours, 30 minutes)
     """
     # The underlying endpoint expects the raw list payload, not a wrapper object.
     # `facts.root` contains Pydantic models; dump them to plain JSON-serializable dicts.

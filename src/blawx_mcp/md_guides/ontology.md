@@ -18,6 +18,10 @@ objects.
 ## Rules
 
 - Parameters are typed using categories or supported datatypes (numbers, dates, datetimes, times, durations).
+- In Blawx JSON encodings, Date, Datetime, Time, and Duration parameters are still
+  represented as value blocks (`date_value`, `datetime_value`, `time_value`, and
+  `duration_value`). Do not use ISO string literals in relationship inputs; the
+  server converts the value blocks to backend timestamps.
 - When encoding, only use the ontology’s predicates, Undefined predicates will fail.
 - Negative versions of predicates are not required in the ontology
 - NLG components (i.e. prefix, postfix, postfixN) are required.

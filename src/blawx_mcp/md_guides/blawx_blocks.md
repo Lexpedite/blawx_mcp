@@ -88,6 +88,12 @@ Notes:
 - `time_value`: fields `hours`, `minutes`, `seconds`
 - `datetime_value`: fields `year`, `month`, `day`, `hours`, `minutes`, `seconds`
 
+Use these primitive value blocks in relationship inputs whose ontology parameter
+type is Number, Date, Datetime, Time, or Duration. Do not place ISO date strings
+such as `"2025-01-15"` or datetime strings such as `"2025-01-15T14:30"` directly
+in Blawx JSON block inputs. The Blawx server converts the date and datetime
+blocks to the backend timestamp representation.
+
 ---
 
 ## Math/date/time/duration operations

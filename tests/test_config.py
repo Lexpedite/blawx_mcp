@@ -171,3 +171,23 @@ def test_settings_has_no_team_slug():
     signature = inspect.signature(Settings)
 
     assert "team_slug" not in signature.parameters
+
+
+def test_mcp_tools_keep_structured_output_schemas():
+    from blawx_mcp import server
+
+    for name, tool in server.mcp._tool_manager._tools.items():
+        assert tool.fn_metadata.output_schema is not None, name
+
+
+def test_encoding_guide_structured_output_is_not_duplicated_as_text():
+    from blawx_mcp import server
+
+    async def run():
+        return await server.mcp.call_tool("blawx_encoding_guide", {"topic": "ontology"})
+
+    converted = asyncio.run(run())
+
+    assert converted.content == []
+    assert converted.structuredContent is not None
+    assert "# Blawx ontology guidance" in converted.structuredContent["guidance_markdown"]
