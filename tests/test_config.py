@@ -143,6 +143,44 @@ def test_team_id_cache_isolation():
     _TEAM_ID_CACHE.clear()
 
 
+def test_resolve_team_id_uses_team_list_response(monkeypatch):
+    from blawx_mcp import server
+
+    class FakeResponse:
+        is_success = True
+        status_code = 200
+        headers = {"content-type": "application/json"}
+
+        def json(self):
+            return [{"id": 42, "slug": "my-team"}]
+
+    class FakeClient:
+        def __init__(self, timeout):
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def get(self, url, headers):
+            return FakeResponse()
+
+    server._TEAM_ID_CACHE.clear()
+    monkeypatch.setattr(server.httpx, "AsyncClient", FakeClient)
+
+    async def run():
+        return await server._resolve_team_id(
+            base_url="https://example.test",
+            api_key="key",
+            team_slug="my-team",
+        )
+
+    assert asyncio.run(run()) == 42
+    server._TEAM_ID_CACHE.clear()
+
+
 def test_project_scoped_tools_require_team_slug():
     """Project-scoped public tools should expose team_slug explicitly."""
     from blawx_mcp import server

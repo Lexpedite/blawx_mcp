@@ -455,17 +455,15 @@ async def _resolve_team_id(*, base_url: str, api_key: str, team_slug: str) -> in
                     f"Failed to list teams (status {resp.status_code}) while resolving team slug {team_slug!r}: {body}"
                 )
             data = resp.json() if resp.headers.get("content-type", "").lower().startswith("application/json") else {}
-            results = data.get("results") or []
+            results = data if isinstance(data, list) else []
+
             for team in results:
                 if isinstance(team, dict) and team.get("slug") == team_slug:
                     team_id = int(team["id"])
                     _TEAM_ID_CACHE[(api_key, team_slug)] = team_id
                     return team_id
 
-            next_url = data.get("next")
-            if not next_url:
-                break
-            url = next_url
+            break
 
     raise RuntimeError(
         f"Team slug {team_slug!r} not found in /teams/api/teams/ results for this API key."
