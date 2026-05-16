@@ -32,7 +32,10 @@ Blocks can include: `type`, `inputs`, `fields`, `extraState`, and (for statement
 - Do not end an object symbol with an underscore followed by digits, such as `contract_1`; that suffix is reserved by Blawx.
 - Before referring to an entity in facts, questions, or encoding blocks, use
   `blawx_declared_objects_list` to see whether an object has already been
-  declared elsewhere in the project.
+  declared elsewhere in the project. The tool returns
+  `{"declared_objects": [{"symbol": "...", "legal_doc_part_id": 123}]}`.
+  If the symbol is ambiguous, use the `legal_doc_part_id` to read the source
+  legal text and confirm what the object refers to.
 - `doc_selector` requires `extraState.section_reference` in addition to `fields.doc_part_name`.
 - Use `object_declaration` with `extraState.category_name` when introducing a new object.
 - `object_category` uses `fields.category_name` plus `inputs.object`.

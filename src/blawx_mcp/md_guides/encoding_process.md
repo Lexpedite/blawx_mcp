@@ -26,7 +26,10 @@ Use this guide first, then follow the referenced specialized guides at each step
 
 Before creating fact scenarios, questions, or encoding parts that refer to
 entities, call `blawx_declared_objects_list` and reuse existing declared object
-names when appropriate.
+names when appropriate. The response format is
+`{"declared_objects": [{"symbol": "...", "legal_doc_part_id": 123}]}`.
+When you need to understand what a symbol means, use that `legal_doc_part_id`
+to inspect the corresponding legal text before reusing or extending it.
 
 ## 2) Select source sections
 

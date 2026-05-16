@@ -638,7 +638,10 @@ async def blawx_declared_objects_list(team_slug: str, project_id: int) -> dict[s
 
     Use this before creating fact scenarios, questions, or encoding parts that
     refer to entities. It helps you reuse existing declared objects and avoid
-    creating duplicate or conflicting object declarations.
+    creating duplicate or conflicting object declarations. Responses are shaped
+    as `{"declared_objects": [{"symbol": "...", "legal_doc_part_id": 123}]}`
+    so you can inspect the linked legal doc part text when the symbol meaning is
+    unclear.
     """
     result = await _project_request_json(
         method="GET",
@@ -651,7 +654,8 @@ async def blawx_declared_objects_list(team_slug: str, project_id: int) -> dict[s
         **result,
         "workflow_hint": (
             "Use these declared objects before writing facts, questions, or encoding parts that refer to entities. "
-            "If the needed entity already exists, reuse its declared object name instead of creating a duplicate."
+            "Each entry appears in `declared_objects` with a `symbol` and `legal_doc_part_id`. "
+            "If the needed entity already exists, reuse its symbol instead of creating a duplicate, and read the cited legal doc part when you need to infer what the symbol means."
         ),
     }
 
