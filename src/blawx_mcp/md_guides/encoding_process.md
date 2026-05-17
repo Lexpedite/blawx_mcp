@@ -8,9 +8,10 @@ Use this guide first, then follow the referenced specialized guides at each step
 
 - Team discovery: `blawx_teams_list`
 - Project discovery: `blawx_projects_list`
+- Declared object discovery: `blawx_declared_objects_list`
 - Legal text discovery: `blawx_legaldocs_list`, `blawx_legaldocparts_list`, `blawx_legaldocpart_detail`
 - Existing encoding: `blawx_encodingpart_get`
-- Ontology inspection/update: `blawx_ontology_list`, `blawx_ontology_category_detail`, `blawx_ontology_relationship_detail`, and related ontology write tools if needed
+- Ontology inspection/update: `blawx_ontology_list` first; use `blawx_ontology_category_detail` or `blawx_ontology_relationship_detail` only for a focused lookup of one listed element; use related ontology write tools if needed
 - Test setup: `blawx_questions_list`, `blawx_question_detail`, fact-scenario tools, and related write tools if needed
 - Test execution and analysis: ask tools, `blawx_list_answers`, explanation-part tools
 - Encoding write: `blawx_encodingpart_update`
@@ -22,6 +23,13 @@ Use this guide first, then follow the referenced specialized guides at each step
 3. Call `blawx_projects_list` with `team_slug` and choose the `project_id` you will pass to every project-scoped tool.
 4. Treat that `team_slug` and `project_id` as mandatory for all later ontology, legal-doc, question, fact-scenario, ask/answer, and encoding calls.
 5. Only `blawx_health`, `blawx_teams_list`, and `blawx_encoding_guide` can be used without both values.
+
+Before creating fact scenarios, questions, or encoding parts that refer to
+entities, call `blawx_declared_objects_list` and reuse existing declared object
+names when appropriate. The response format is
+`{"declared_objects": [{"symbol": "...", "legal_doc_part_id": 123}]}`.
+When you need to understand what a symbol means, use that `legal_doc_part_id`
+to inspect the corresponding legal text before reusing or extending it.
 
 ## 2) Select source sections
 
@@ -101,6 +109,10 @@ Generate the `blawx_json` blocks that implement the target logic.
 
 - Prefer explicit category-membership checks early in rule conditions.
 - Use block structures consistent with ontology arity/parameter typing.
+- For Date, Datetime, Time, and Duration parameters, use the corresponding
+  primitive value blocks (`date_value`, `datetime_value`, `time_value`,
+  `duration_value`) rather than ISO strings. The server converts those blocks to
+  timestamps internally.
 
 For block-shape and syntax rules, read guide topics: `blawx-json` and `blawx-blocks`.
 

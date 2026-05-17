@@ -122,9 +122,13 @@ These tools give your coding agent the following capabilities:
 
 All project-scoped tools require both `team_slug` and `project_id`. Agents should always call `blawx_teams_list` first. If there is only one team, use that team's slug; if there are multiple teams and the user has not already identified one, ask the user which team to use. Then call `blawx_projects_list` with that `team_slug` and pass both `team_slug` and the returned `project_id` to every later ontology, legal-doc, question, fact-scenario, ask/answer, and encoding tool.
 
+Unless noted otherwise, MCP tools return a compact structured response with `status_code`, `ok`, and `body`. Some tools also include `workflow_hint` and `next_recommended_tool`. Request URLs, headers, params, and echoed payloads are intentionally omitted from tool output.
+
+Two tools intentionally return MCP text content blocks instead of structured JSON: `blawx_encoding_guide` and `blawx_legaldocparts_list`.
+
 1. Discover teams and choose a `team_slug`.
 2. Discover projects under that team and choose a `project_id`.
-3. Discover what the chosen project exposes (questions, fact scenarios, ontology).
+3. Discover what the chosen project exposes (declared objects, questions, fact scenarios, ontology).
 4. Create, update, and delete LegalDocs, LegalDocParts, and EncodingParts.
 5. Ask a question (using either a stored fact scenario or a custom facts payload).
 6. Browse answers and drill into explanations (model/attributes/explanation text).
@@ -133,7 +137,7 @@ Here's a brief run-down of the available tools.
 
 ### Health check
 
-- `blawx_health`: verifies the Blawx app is reachable and returns status/body.
+- `blawx_health`: verifies the Blawx app is reachable and returns the compact status/body envelope.
 
 ### Discover Project Content
 
@@ -141,18 +145,18 @@ Agents should start by listing teams, then listing projects under the selected t
 
 - `blawx_teams_list`: lists the teams available to the configured API key.
 - `blawx_projects_list`: lists the available projects for a `team_slug`.
-- `blawx_project_detail`: retrieves metadata for a specific project id.
 
 Once a team and project are chosen, every project-scoped tool requires explicit `team_slug` and `project_id` arguments.
 Agents will then usually list the available questions, fact scenarios, and vocabulary.
 
+- `blawx_declared_objects_list`: lists objects declared across the project's encoding parts as `{"declared_objects": [{"symbol": "...", "legal_doc_part_id": 123}]}`; use before writing fact scenarios, questions, or encodings that refer to entities. When the symbol meaning is unclear, inspect the cited legal doc part text to interpret it.
 - `blawx_questions_list`: lists shared questions available in the project.
 - `blawx_question_detail`: retrieves a specific question's details (useful when deciding which question id to ask).
 - `blawx_fact_scenarios_list`: lists stored fact scenarios (prebuilt sets of facts you can re-use).
 - `blawx_fact_scenario_detail`: shows the facts contained in a specific fact scenario.
-- `blawx_ontology_list`: lists ontology categories/relationships (the project's vocabulary).
-- `blawx_ontology_category_detail`: details for a specific category.
-- `blawx_ontology_relationship_detail`: details for a specific relationship (including arity/parameters).
+- `blawx_ontology_list`: primary ontology discovery tool; lists categories, relationships, and relationship parameters with the details needed for encoding.
+- `blawx_ontology_category_detail`: focused lookup for one category already present in `blawx_ontology_list`.
+- `blawx_ontology_relationship_detail`: focused lookup for one relationship already present in `blawx_ontology_list`, including the same arity/parameter information.
 
 Additional read-write tools are also available for project editing (questions, fact scenarios, ontology categories/relationships/parameters).
 
@@ -199,7 +203,8 @@ For question saves specifically, the encoding is expected to include a single ou
 		"slug": "contract",
 		"short_description": "",
 		"nlg_prefix": "",
-		"nlg_postfix": "is a contract"
+		"nlg_postfix": "is a contract",
+		"nlg_pattern": "{1} is a contract"
 	}
 }
 ```
@@ -210,7 +215,8 @@ For question saves specifically, the encoding is expected to include a single ou
 		"name": "Estimated Expenditure",
 		"slug": "estimated_expenditure",
 		"short_description": "",
-		"nlg_prefix": ""
+		"nlg_prefix": "",
+		"nlg_pattern": "{1}'s estimated expenditure is {2}"
 	}
 }
 ```
@@ -230,8 +236,9 @@ Notes:
 
 - Category create/update currently requires `name` and `slug`; `nlg_postfix` must be 50 characters or fewer.
 - Relationship create/update currently requires `name` and `slug`.
+- `nlg_pattern` on categories and relationships illustrates how statements using that predicate appear in the coding interface and natural language explanations.
 - Relationship-parameter create/update currently requires `order` and `type_id`.
-- Use `blawx_ontology_categories_list` or `blawx_ontology_category_detail` to discover valid category ids for `type_id`.
+- Use `blawx_ontology_list` or `blawx_ontology_category_detail` to discover valid category ids for `type_id`.
 
 Patch-style tools are intentionally not exposed in this MCP server to reduce tool-selection ambiguity.
 
@@ -314,10 +321,10 @@ For the full LegalDocPart structure guidance, including `parent_id`, `include_pa
 1. `blawx_teams_list` to choose a `team_slug`.
 2. `blawx_projects_list` to choose a `project_id`.
 3. `blawx_legaldocs_list` (or `blawx_legaldoc_detail`) to identify a `legal_doc_id`.
-4. `blawx_legaldocparts_list` to list part ids/titles/order for that document.
-5. `blawx_legaldocpart_detail` for each relevant `legal_doc_part_id` to retrieve the actual part text/content.
+4. `blawx_legaldocparts_list` to read the Markdown outline for that document. This MCP tool returns the outline as a text content block, not structured data. The outline includes part IDs, optional encoding IDs and markers, hierarchy indentation, index text, and short part text.
+5. `blawx_legaldocpart_detail` for each relevant `legal_doc_part_id` when you need full fields, content-in-context, pincite, or `encoding_part_id`. Detail responses do not include `parent_id`, `path`, `depth`, or `numchild`; use the parts outline for hierarchy.
 
-`blawx_legaldocparts_list` is primarily navigational metadata; `blawx_legaldocpart_detail` is the tool that returns the text for a specific part.
+In the parts outline, each item follows `- <legaldocpart_id> [<encodingpart_id> <marker>] <index> <text>`. Marker `!` means the encoding part has content; marker `.` means it exists but is empty. Non-substantive legal document part content is bolded.
 
 **To create or update document structure:**
 

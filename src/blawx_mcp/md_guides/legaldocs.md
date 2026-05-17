@@ -50,8 +50,20 @@ Explicit exception:
 ## What list tools return
 
 - `blawx_legaldocs_list` returns document metadata, not the legal text.
-- `blawx_legaldocparts_list` returns navigational metadata such as `id`, `parent_id`, `path`, `depth`, `element_type`, and `index_text`.
-- `blawx_legaldocpart_detail` returns the actual part content and context fields.
+- `blawx_legaldocparts_list` returns a Markdown outline of the document hierarchy
+  as an MCP text content block, not structured data. It starts with a legend,
+  then one line per part in the shape
+  `- <legaldocpart_id> [<encodingpart_id> <marker>] <index> <text>`.
+- In the parts outline, marker `!` means an encoding part exists and has content;
+  marker `.` means an encoding part exists but is empty. If no encoding part
+  exists, the encoding ID and marker are omitted. Non-substantive part content is
+  bolded.
+- Use `blawx_legaldocparts_list` to choose part IDs and see short legal text in
+  hierarchy context. Use `blawx_legaldocpart_detail` when you need the full part
+  fields, `content_in_context`, `pincite`, or `encoding_part_id`.
+- `blawx_legaldocpart_detail` does not return tree-navigation fields
+  (`parent_id`, `path`, `depth`, or `numchild`). Use the parts Markdown outline
+  for hierarchy.
 
 ## LegalDoc write contract
 
@@ -77,7 +89,9 @@ Observed response shape:
 ## LegalDocPart write contract
 
 LegalDocPart creation is tied to the LegalDoc in the URL.
-The server populates `legal_doc_id`, `path`, `depth`, `numchild`, `content_in_context`, and `pincite`.
+The server populates read-only fields such as `legal_doc_id`, `encoding_part_id`,
+`content_in_context`, and `pincite`. It manages tree fields internally; detail
+responses do not include `parent_id`, `path`, `depth`, or `numchild`.
 
 Fields accepted on create:
 
@@ -116,10 +130,7 @@ Observed part response shape:
 {
   "id": 649,
   "legal_doc_id": 85,
-  "parent_id": null,
-  "path": "003I",
-  "depth": 1,
-  "numchild": 0,
+  "encoding_part_id": 712,
   "element_type": "Subsection",
   "index_text": "(1)",
   "text_content": "After update.",

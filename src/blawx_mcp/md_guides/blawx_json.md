@@ -9,6 +9,7 @@ For end-to-end section selection, ontology planning, testing flow, and iteration
 ## Tool touchpoints
 
 - Read/write encoding parts: `blawx_encodingpart_get`, `blawx_encodingpart_update`
+- Declared object discovery: `blawx_declared_objects_list`
 - Reference material: `blawx_encoding_guide` topics `blawx-blocks`, `valid-blawx-json`, `encoding-examples`
 
 ## Block JSON shape
@@ -24,7 +25,17 @@ Blocks can include: `type`, `inputs`, `fields`, `extraState`, and (for statement
 - No disjunction operator: represent disjunctions as multiple rules with the same conclusion.
 - Variable names must be capitalized (e.g., `A`).
 - Object names must be lowercase atoms (e.g., `john_doe`, `contract_main`).
+- Date, datetime, time, and duration relationship parameters must be supplied with
+  Blawx value blocks, not ISO strings or raw JSON scalar values. Use
+  `date_value`, `datetime_value`, `time_value`, and `duration_value`; the Blawx
+  server converts these block values to its internal timestamp representation.
 - Do not end an object symbol with an underscore followed by digits, such as `contract_1`; that suffix is reserved by Blawx.
+- Before referring to an entity in facts, questions, or encoding blocks, use
+  `blawx_declared_objects_list` to see whether an object has already been
+  declared elsewhere in the project. The tool returns
+  `{"declared_objects": [{"symbol": "...", "legal_doc_part_id": 123}]}`.
+  If the symbol is ambiguous, use the `legal_doc_part_id` to read the source
+  legal text and confirm what the object refers to.
 - `doc_selector` requires `extraState.section_reference` in addition to `fields.doc_part_name`.
 - Use `object_declaration` with `extraState.category_name` when introducing a new object.
 - `object_category` uses `fields.category_name` plus `inputs.object`.

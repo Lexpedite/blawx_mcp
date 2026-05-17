@@ -64,8 +64,8 @@ mcp = FastMCP(
 )
 
 
-@mcp.tool()
-async def blawx_encoding_guide(topic: str = "quickstart") -> dict[str, Any]:
+@mcp.tool(structured_output=False)
+async def blawx_encoding_guide(topic: str = "quickstart") -> str:
     """Read this first before project-scoped encoding work.
 
     Use this tool before project-scoped legal-doc, encoding, ontology, question,
@@ -81,22 +81,27 @@ async def blawx_encoding_guide(topic: str = "quickstart") -> dict[str, Any]:
     a `team_slug` and `project_id` discovered with `blawx_teams_list` and
     `blawx_projects_list`.
 
-    Topics: quickstart | blawx-json | valid-blawx-json | blawx-blocks | encodingpart | encoding-process | encoding-examples | ontology | legaldocs | scasp | all
+    Topics: quickstart | list | blawx-json | valid-blawx-json | blawx-blocks | encodingpart | encoding-process | encoding-examples | ontology | legaldocs | scasp | all
     """
 
-    available_topics = [
-        "quickstart",
-        "blawx-json",
-        "valid-blawx-json",
-        "blawx-blocks",
-        "encodingpart",
-        "encoding-process",
-        "encoding-examples",
-        "ontology",
-        "legaldocs",
-        "scasp",
-        "all",
-    ]
+    topic_summaries = {
+        "quickstart": "Start here. Explains team/project discovery, required IDs, and the first guide topics to read.",
+        "list": "Lists guide topics and summarizes what each one covers.",
+        "encoding-process": "Canonical end-to-end workflow for choosing legal text, checking ontology support, encoding, and testing.",
+        "encodingpart": "Write-contract details for encoding parts, including the required `blawx_json` payload shape.",
+        "blawx-json": "High-level Blawx JSON workspace rules and common encoding constraints.",
+        "blawx-blocks": "Reference for block types, inputs, fields, value blocks, and common block structures.",
+        "valid-blawx-json": "Concrete valid Blawx JSON examples and validation-oriented patterns.",
+        "encoding-examples": "Worked encoding examples for common legal-rule patterns.",
+        "ontology": "Ontology categories, relationships, parameters, NLG fields, and ontology write payloads.",
+        "legaldocs": "LegalDoc and LegalDocPart structure, hierarchy, granularity, and edit-field behavior.",
+        "scasp": "s(CASP) guidance for generated logic, predicates, and explanation-oriented patterns.",
+        "all": "All guide content in one response. Large; prefer targeted topics unless you need everything.",
+    }
+
+    topic_list = "# Guide Topics\n\n" + "\n".join(
+        f"- `{name}`: {summary}" for name, summary in topic_summaries.items()
+    )
 
     normalized = topic.strip().lower()
     guides = {
@@ -127,9 +132,12 @@ async def blawx_encoding_guide(topic: str = "quickstart") -> dict[str, Any]:
         "Do not send `content`, `scasp_encoding`, or stringified JSON.\n"
         "If ontology terms are unclear, read `ontology` before writing blocks."
     )
+    quickstart = f"{quickstart}\n\n{topic_list}"
 
     if normalized == "quickstart":
         selected = quickstart
+    elif normalized == "list":
+        selected = topic_list
     elif normalized == "all":
         selected = (
             "# Mandatory First Step\n"
@@ -162,19 +170,9 @@ async def blawx_encoding_guide(topic: str = "quickstart") -> dict[str, Any]:
     elif normalized in guides:
         selected = guides[normalized]
     else:
-        return {
-            "ok": False,
-            "error": "Unknown topic",
-            "requested_topic": topic,
-            "available_topics": available_topics,
-        }
+        return f"Unknown guide topic `{topic}`. Use topic `quickstart` to begin or `list` to see available guide topics."
 
-    return {
-        "ok": True,
-        "topic": normalized,
-        "guidance_markdown": selected,
-        "available_topics": available_topics,
-    }
+    return selected
 
 
 async def _request_body(
@@ -407,6 +405,12 @@ async def _request_json(
     params: dict[str, Any] | list[tuple[str, Any]] | None = None,
     timeout_seconds: float = 30.0,
 ) -> dict[str, Any]:
+    """HTTP helper for API tools.
+
+    Return only what the server added: status, success, and parsed response body.
+    Do not echo request URL, headers, or JSON payload back into MCP tool output.
+    """
+
     headers = _auth_headers(api_key)
     timeout = httpx.Timeout(timeout_seconds)
     async with httpx.AsyncClient(timeout=timeout) as client:
@@ -420,21 +424,9 @@ async def _request_json(
 
     body = await _get_json_or_text(resp)
     return {
-        "url": url,
-        "params": params,
-        "request": json_body,
-        "request_headers": {
-            "authorization": "Api-Key <redacted>",
-            "accept": headers.get("Accept"),
-        },
         "status_code": resp.status_code,
         "ok": resp.is_success,
         "body": body,
-        "headers": {
-            "content-type": resp.headers.get("content-type"),
-            "www-authenticate": resp.headers.get("www-authenticate"),
-            "location": resp.headers.get("location"),
-        },
     }
 
 
@@ -457,17 +449,15 @@ async def _resolve_team_id(*, base_url: str, api_key: str, team_slug: str) -> in
                     f"Failed to list teams (status {resp.status_code}) while resolving team slug {team_slug!r}: {body}"
                 )
             data = resp.json() if resp.headers.get("content-type", "").lower().startswith("application/json") else {}
-            results = data.get("results") or []
+            results = data if isinstance(data, list) else []
+
             for team in results:
                 if isinstance(team, dict) and team.get("slug") == team_slug:
                     team_id = int(team["id"])
                     _TEAM_ID_CACHE[(api_key, team_slug)] = team_id
                     return team_id
 
-            next_url = data.get("next")
-            if not next_url:
-                break
-            url = next_url
+            break
 
     raise RuntimeError(
         f"Team slug {team_slug!r} not found in /teams/api/teams/ results for this API key."
@@ -632,35 +622,55 @@ async def blawx_projects_list(team_slug: str) -> dict[str, Any]:
         "workflow_hint": (
             "After choosing `team_slug` with blawx_teams_list, pick a project id from this list and pass it as `project_id` "
             "to every downstream project-scoped tool together with this `team_slug`. Only "
-            "blawx_health, blawx_teams_list, and blawx_encoding_guide do not require both."
+            "blawx_health, blawx_teams_list, and blawx_encoding_guide do not require both. "
+            "Next, list the project content you need, such as declared objects, questions, fact scenarios, ontology, or legal docs."
         ),
-        "next_recommended_tool": "blawx_project_detail",
+        "next_recommended_tool": "blawx_declared_objects_list",
     }
 
 
 @mcp.tool()
-async def blawx_project_detail(team_slug: str, project_id: int) -> dict[str, Any]:
-    """Get metadata for a single project id obtained from blawx_projects_list.
+async def blawx_declared_objects_list(team_slug: str, project_id: int) -> dict[str, Any]:
+    """List objects declared across the project's encoding parts.
 
     `team_slug` should be selected with `blawx_teams_list`; `project_id` should
     be selected with `blawx_projects_list`.
-    """
 
-    return await _project_request_json(
+    Use this before creating fact scenarios, questions, or encoding parts that
+    refer to entities. It helps you reuse existing declared objects and avoid
+    creating duplicate or conflicting object declarations. Responses are shaped
+    as `{"declared_objects": [{"symbol": "...", "legal_doc_part_id": 123}]}`
+    so you can inspect the linked legal doc part text when the symbol meaning is
+    unclear.
+    """
+    result = await _project_request_json(
         method="GET",
         project_id=project_id,
         team_slug=team_slug,
-        api_path="",
+        api_path="declared-objects/",
         timeout_seconds=30.0,
     )
+    return {
+        **result,
+        "workflow_hint": (
+            "Use these declared objects before writing facts, questions, or encoding parts that refer to entities. "
+            "Each entry appears in `declared_objects` with a `symbol` and `legal_doc_part_id`. "
+            "If the needed entity already exists, reuse its symbol instead of creating a duplicate, and read the cited legal doc part when you need to infer what the symbol means."
+        ),
+    }
 
 
 @mcp.tool()
 async def blawx_ontology_list(team_slug: str, project_id: int) -> dict[str, Any]:
-    """List ontology (available categories and relationships).
+    """List the full ontology: categories, relationships, and relationship parameters.
 
     `team_slug` should be selected with `blawx_teams_list`; `project_id` should
     be selected with `blawx_projects_list`.
+
+    Use this as the primary ontology discovery tool. It includes the details
+    agents usually need for encoding, including category ids/slugs and
+    relationship arity/parameters. Category and relationship detail tools are
+    focused lookups for a single element already present in this list.
     """
     result = await _project_request_json(
         method="GET",
@@ -673,26 +683,11 @@ async def blawx_ontology_list(team_slug: str, project_id: int) -> dict[str, Any]
         **result,
         "workflow_hint": (
             "This tool is project-scoped. Obtain `project_id` from blawx_projects_list first, "
-            "then use category/relationship detail tools for specific ids from this list."
+            "Use this as the primary ontology discovery result; it includes the category and relationship "
+            "details needed for encoding. Use category/relationship detail tools only when you want the same "
+            "information focused on one specific id from this list."
         ),
-        "next_recommended_tool": "blawx_ontology_category_detail",
     }
-
-
-@mcp.tool()
-async def blawx_ontology_categories_list(team_slug: str, project_id: int) -> dict[str, Any]:
-    """List ontology categories.
-
-    This endpoint is read-write in the API (create/update/delete are also supported).
-    """
-
-    return await _project_request_json(
-        method="GET",
-        project_id=project_id,
-        team_slug=team_slug,
-        api_path="ontology/categories/",
-        timeout_seconds=30.0,
-    )
 
 
 @mcp.tool()
@@ -708,10 +703,12 @@ async def blawx_ontology_category_create(team_slug: str, project_id: int, payloa
             "slug": "contract",
             "short_description": "",
             "nlg_prefix": "",
-            "nlg_postfix": "is a contract"
+            "nlg_postfix": "is a contract",
+            "nlg_pattern": "{1} is a contract"
         }
 
         `nlg_postfix` is currently limited to 50 characters by the Blawx API.
+        `nlg_pattern` illustrates coding-interface and explanation display text.
     """
 
     return await _project_request_json(
@@ -753,7 +750,10 @@ async def blawx_ontology_category_delete(team_slug: str, project_id: int, catego
 
 @mcp.tool()
 async def blawx_ontology_category_detail(team_slug: str, project_id: int, category_id: int) -> dict[str, Any]:
-    """Get category details by id obtained from blawx_ontology_list tool.
+    """Get one category by id from blawx_ontology_list.
+
+    `blawx_ontology_list` already includes category details. Use this only when
+    you want the same information focused on a single category.
     """
     return await _project_request_json(
         method="GET",
@@ -766,26 +766,17 @@ async def blawx_ontology_category_detail(team_slug: str, project_id: int, catego
 
 @mcp.tool()
 async def blawx_ontology_relationship_detail(team_slug: str, project_id: int, relationship_id: int) -> dict[str, Any]:
-    """Get relationship details by id obtained from blawx_ontology_list tool.
+    """Get one relationship by id from blawx_ontology_list.
+
+    `blawx_ontology_list` already includes relationship details and parameters.
+    Use this only when you want the same information focused on a single
+    relationship.
     """
     return await _project_request_json(
         method="GET",
         project_id=project_id,
         team_slug=team_slug,
         api_path=f"ontology/relationships/{relationship_id}/",
-        timeout_seconds=30.0,
-    )
-
-
-@mcp.tool()
-async def blawx_ontology_relationships_list(team_slug: str, project_id: int) -> dict[str, Any]:
-    """List ontology relationships."""
-
-    return await _project_request_json(
-        method="GET",
-        project_id=project_id,
-        team_slug=team_slug,
-        api_path="ontology/relationships/",
         timeout_seconds=30.0,
     )
 
@@ -802,8 +793,11 @@ async def blawx_ontology_relationship_create(team_slug: str, project_id: int, pa
       "name": "Estimated Expenditure",
       "slug": "estimated_expenditure",
       "short_description": "",
-      "nlg_prefix": ""
+      "nlg_prefix": "",
+      "nlg_pattern": "{1}'s estimated expenditure is {2}"
     }
+
+    `nlg_pattern` illustrates coding-interface and explanation display text.
     """
 
     return await _project_request_json(
@@ -839,19 +833,6 @@ async def blawx_ontology_relationship_delete(team_slug: str, project_id: int, re
         project_id=project_id,
         team_slug=team_slug,
         api_path=f"ontology/relationships/{relationship_id}/",
-        timeout_seconds=30.0,
-    )
-
-
-@mcp.tool()
-async def blawx_ontology_relationship_parameters_list(team_slug: str, project_id: int, relationship_id: int) -> dict[str, Any]:
-    """List parameters for a relationship."""
-
-    return await _project_request_json(
-        method="GET",
-        project_id=project_id,
-        team_slug=team_slug,
-        api_path=f"ontology/relationships/{relationship_id}/parameters/",
         timeout_seconds=30.0,
     )
 
@@ -896,19 +877,6 @@ async def blawx_ontology_relationship_parameter_update(
         team_slug=team_slug,
         api_path=f"ontology/relationships/{relationship_id}/parameters/{parameter_id}/",
         json_body=payload,
-        timeout_seconds=30.0,
-    )
-
-
-@mcp.tool()
-async def blawx_ontology_relationship_parameter_detail(team_slug: str, project_id: int, relationship_id: int, parameter_id: int) -> dict[str, Any]:
-    """Get a relationship parameter definition by id."""
-
-    return await _project_request_json(
-        method="GET",
-        project_id=project_id,
-        team_slug=team_slug,
-        api_path=f"ontology/relationships/{relationship_id}/parameters/{parameter_id}/",
         timeout_seconds=30.0,
     )
 
@@ -1215,13 +1183,18 @@ async def blawx_question_ask_with_facts(team_slug: str, project_id: int, questio
     2. DATATYPE VALUES (for Number, Date, Datetime, Time, Duration categories):
         - Do NOT declare these in category facts
         - Do NOT convert to atoms
-        - Use the values directly in relationships as shown below:
+        - In Blawx JSON encodings, use primitive value blocks instead of string
+          literals: `date_value`, `datetime_value`, `time_value`, and
+          `duration_value`. The server converts date and datetime blocks to its
+          backend timestamp representation.
+        - For this structured ask-facts payload only, use the values directly in
+          relationships as shown below:
     
         Numbers: Plain integers or decimals (e.g., 10000, 3750000.50, 200000)
-        Dates: ISO 8601 format YYYY-MM-DD (e.g., "2025-01-15", "2024-12-31")
-        Times: HH:MM format (e.g., "14:30", "09:00")
-        Datetimes: ISO 8601 format YYYY-MM-DDTHH:MM (e.g., "2025-01-15T14:30", "2024-12-31T23:59")
-        Durations: ISO 8601 duration format (e.g., "P3D" for 3 days, "PT5H" for 5 hours, "P1DT2H30M" for 1 day, 2 hours, 30 minutes)
+        Dates: date strings for this fact payload only (e.g., "2025-01-15", "2024-12-31")
+        Times: time strings for this fact payload only (e.g., "14:30", "09:00")
+        Datetimes: datetime strings for this fact payload only (e.g., "2025-01-15T14:30", "2024-12-31T23:59")
+        Durations: duration strings for this fact payload only (e.g., "P3D" for 3 days, "PT5H" for 5 hours, "P1DT2H30M" for 1 day, 2 hours, 30 minutes)
     """
     # The underlying endpoint expects the raw list payload, not a wrapper object.
     # `facts.root` contains Pydantic models; dump them to plain JSON-serializable dicts.
@@ -1449,9 +1422,10 @@ async def blawx_legaldocs_list(team_slug: str, project_id: int) -> dict[str, Any
     `team_slug` should be selected with `blawx_teams_list`; `project_id` should
     be selected with `blawx_projects_list`.
 
-    This returns document-level metadata. To read legislation text, then call:
-    1) `blawx_legaldocparts_list` for the chosen legal doc
-    2) `blawx_legaldocpart_detail` for each relevant part
+    This returns document-level metadata. To read legislation text, call
+    `blawx_legaldocparts_list` for the chosen legal doc. Use
+    `blawx_legaldocpart_detail` for full fields, content-in-context, pincite, or
+    encoding_part_id for a selected part.
     """
 
     result = await _project_request_json(
@@ -1465,8 +1439,8 @@ async def blawx_legaldocs_list(team_slug: str, project_id: int) -> dict[str, Any
         **result,
         "workflow_hint": (
             "This tool is project-scoped; choose `team_slug` with blawx_teams_list, then obtain `project_id` from blawx_projects_list. "
-            "This is a document list. To read legal text, call blawx_legaldocparts_list for a legal_doc_id, "
-            "then call blawx_legaldocpart_detail for the relevant part(s). For structure and write fields, "
+            "This is a document list. To read legal text, call blawx_legaldocparts_list for a legal_doc_id. "
+            "Use blawx_legaldocpart_detail for full fields, content-in-context, pincite, or encoding_part_id. For structure and write fields, "
             "read blawx_encoding_guide topic 'legaldocs'."
         ),
         "next_recommended_tool": "blawx_legaldocparts_list",
@@ -1505,8 +1479,9 @@ async def blawx_legaldoc_detail(team_slug: str, project_id: int, legal_doc_id: i
     """Get a legal doc by id.
 
     This returns document-level metadata. To read the legislative text itself,
-    list parts with `blawx_legaldocparts_list` and then fetch part text with
-    `blawx_legaldocpart_detail`.
+    use the Markdown outline from `blawx_legaldocparts_list`. Use
+    `blawx_legaldocpart_detail` for full fields, content-in-context, pincite, or
+    encoding_part_id for a selected part.
     """
 
     result = await _project_request_json(
@@ -1520,7 +1495,7 @@ async def blawx_legaldoc_detail(team_slug: str, project_id: int, legal_doc_id: i
         **result,
         "workflow_hint": (
             "This is legal-doc metadata. To read legal text, call blawx_legaldocparts_list "
-            "for this legal_doc_id, then call blawx_legaldocpart_detail for relevant part ids. "
+            "for this legal_doc_id. Use blawx_legaldocpart_detail for full fields, content-in-context, pincite, or encoding_part_id. "
             "Read blawx_encoding_guide topic 'legaldocs' before editing document structure."
         ),
         "next_recommended_tool": "blawx_legaldocparts_list",
@@ -1559,15 +1534,25 @@ async def blawx_legaldoc_delete(team_slug: str, project_id: int, legal_doc_id: i
     )
 
 
-@mcp.tool()
-async def blawx_legaldocparts_list(team_slug: str, project_id: int, legal_doc_id: int) -> dict[str, Any]:
-    """List parts for a legal doc.
+@mcp.tool(structured_output=False)
+async def blawx_legaldocparts_list(team_slug: str, project_id: int, legal_doc_id: int) -> str:
+    """List legal doc parts as a Markdown outline.
 
     `team_slug` should be selected with `blawx_teams_list`; `project_id` should
     be selected with `blawx_projects_list`.
 
-    This list is mainly navigational metadata (part ids/titles/order). To view the
-    actual legislation text for a part, call `blawx_legaldocpart_detail` for that part id.
+    This MCP tool returns the Markdown as a text content block, not as
+    structuredContent. It starts with a legend, then an indented hierarchy where
+    each item is:
+    `- <legaldocpart_id> [<encodingpart_id> <marker>] <index> <text>`.
+
+    Marker `!` means an encoding part exists and has content. Marker `.` means an
+    encoding part exists but is empty. If no encoding part exists, the encoding ID
+    and marker are omitted. Non-substantive legal doc part text is bolded.
+
+    Use this outline to choose part IDs and see short part text in context. Use
+    `blawx_legaldocpart_detail` when you need the full part fields, content-in-context,
+    or pincite for a specific part.
     """
 
     result = await _project_request_json(
@@ -1577,16 +1562,14 @@ async def blawx_legaldocparts_list(team_slug: str, project_id: int, legal_doc_id
         api_path=f"legaldocs/{legal_doc_id}/parts/",
         timeout_seconds=30.0,
     )
-    return {
-        **result,
-        "workflow_hint": (
-            "This tool is project-scoped; choose `team_slug` with blawx_teams_list, then obtain `project_id` from blawx_projects_list. "
-            "This is a parts list. To read the actual text, call blawx_legaldocpart_detail for each relevant "
-            "legal_doc_part_id. Use blawx_legaldocpart_create to add a new part, and default to one part per "
-            "heading, section, subsection, paragraph, or similar legislative unit with distinct text."
-        ),
-        "next_recommended_tool": "blawx_legaldocpart_detail",
-    }
+    body = result.get("body")
+    if result.get("ok"):
+        return body if isinstance(body, str) else str(body)
+
+    return (
+        f"Failed to list legal doc parts for legal_doc_id `{legal_doc_id}` "
+        f"(status {result.get('status_code')}).\n\n{body}"
+    )
 
 
 @mcp.tool()
@@ -1631,7 +1614,11 @@ async def blawx_legaldocpart_create(
 async def blawx_legaldocpart_detail(team_slug: str, project_id: int, legal_doc_id: int, legal_doc_part_id: int) -> dict[str, Any]:
     """Get a single legal doc part by id.
 
-    Use this tool to view the actual text/content for a legal doc part.
+    Use this tool to view the full fields for a legal doc part, including
+    `text_content`, `content_in_context`, `pincite`, and `encoding_part_id`.
+    Tree-navigation fields (`parent_id`, `path`, `depth`, and `numchild`) are not
+    returned by this detail endpoint; use `blawx_legaldocparts_list` for the
+    Markdown hierarchy outline.
     """
 
     result = await _project_request_json(
@@ -1644,7 +1631,9 @@ async def blawx_legaldocpart_detail(team_slug: str, project_id: int, legal_doc_i
     return {
         **result,
         "workflow_hint": (
-            "This tool returns the part detail, including the legal text/content when present. "
+            "This tool returns the part detail, including legal text/content, content_in_context, pincite, "
+            "and encoding_part_id when present. It does not return parent_id, path, depth, or numchild; "
+            "use blawx_legaldocparts_list for the document hierarchy outline. "
             "For create/update field behavior, read blawx_encoding_guide topic 'legaldocs'."
         ),
     }

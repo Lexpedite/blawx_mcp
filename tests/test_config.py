@@ -143,6 +143,84 @@ def test_team_id_cache_isolation():
     _TEAM_ID_CACHE.clear()
 
 
+def test_resolve_team_id_uses_team_list_response(monkeypatch):
+    from blawx_mcp import server
+
+    class FakeResponse:
+        is_success = True
+        status_code = 200
+        headers = {"content-type": "application/json"}
+
+        def json(self):
+            return [{"id": 42, "slug": "my-team"}]
+
+    class FakeClient:
+        def __init__(self, timeout):
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def get(self, url, headers):
+            return FakeResponse()
+
+    server._TEAM_ID_CACHE.clear()
+    monkeypatch.setattr(server.httpx, "AsyncClient", FakeClient)
+
+    async def run():
+        return await server._resolve_team_id(
+            base_url="https://example.test",
+            api_key="key",
+            team_slug="my-team",
+        )
+
+    assert asyncio.run(run()) == 42
+    server._TEAM_ID_CACHE.clear()
+
+
+def test_request_json_returns_compact_response(monkeypatch):
+    from blawx_mcp import server
+
+    class FakeResponse:
+        status_code = 204
+        is_success = True
+        headers = {"content-type": "application/json", "location": "/unused"}
+
+        def json(self):
+            return {}
+
+    class FakeClient:
+        def __init__(self, timeout):
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def request(self, *args, **kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr(server.httpx, "AsyncClient", FakeClient)
+
+    async def run():
+        return await server._request_json(
+            method="PUT",
+            url="https://example.test/api",
+            api_key="key",
+            json_body={"large": "request"},
+            params={"debug": "nope"},
+        )
+
+    result = asyncio.run(run())
+
+    assert result == {"status_code": 204, "ok": True, "body": {}}
+
+
 def test_project_scoped_tools_require_team_slug():
     """Project-scoped public tools should expose team_slug explicitly."""
     from blawx_mcp import server
@@ -162,12 +240,117 @@ def test_discovery_tool_signatures():
 
     teams_signature = inspect.signature(server.blawx_teams_list)
     projects_signature = inspect.signature(server.blawx_projects_list)
+    declared_objects_signature = inspect.signature(server.blawx_declared_objects_list)
 
     assert "team_slug" not in teams_signature.parameters
     assert list(projects_signature.parameters) == ["team_slug"]
+    assert list(declared_objects_signature.parameters) == ["team_slug", "project_id"]
+    assert not hasattr(server, "blawx_project_detail")
+
+
+def test_removed_redundant_ontology_parameter_read_tools():
+    from blawx_mcp import server
+
+    assert not hasattr(server, "blawx_ontology_categories_list")
+    assert not hasattr(server, "blawx_ontology_relationships_list")
+    assert not hasattr(server, "blawx_ontology_relationship_parameters_list")
+    assert not hasattr(server, "blawx_ontology_relationship_parameter_detail")
 
 
 def test_settings_has_no_team_slug():
     signature = inspect.signature(Settings)
 
     assert "team_slug" not in signature.parameters
+
+
+def test_mcp_tools_keep_structured_output_schemas():
+    from blawx_mcp import server
+
+    for name, tool in server.mcp._tool_manager._tools.items():
+        if name in {"blawx_encoding_guide", "blawx_legaldocparts_list"}:
+            assert tool.fn_metadata.output_schema is None, name
+        else:
+            assert tool.fn_metadata.output_schema is not None, name
+
+
+def test_encoding_guide_returns_content_only():
+    from blawx_mcp import server
+
+    async def run():
+        return await server.mcp.call_tool("blawx_encoding_guide", {"topic": "ontology"})
+
+    converted = asyncio.run(run())
+
+    assert isinstance(converted, list)
+    assert len(converted) == 1
+    assert "# Blawx ontology guidance" in converted[0].text
+
+
+def test_legaldocparts_list_returns_markdown_content_only(monkeypatch):
+    from blawx_mcp import server
+
+    markdown = (
+        "Legend: each item is `- <legaldocpart_id> [<encodingpart_id> <marker>] <index> <text>`.\n\n"
+        "- 10 20 ! Section text\n"
+    )
+
+    async def fake_project_request_json(**kwargs):
+        return {"status_code": 200, "ok": True, "body": markdown}
+
+    monkeypatch.setattr(server, "_project_request_json", fake_project_request_json)
+
+    async def run():
+        return await server.mcp.call_tool(
+            "blawx_legaldocparts_list",
+            {"team_slug": "team", "project_id": 1, "legal_doc_id": 2},
+        )
+
+    converted = asyncio.run(run())
+
+    assert isinstance(converted, list)
+    assert len(converted) == 1
+    assert converted[0].text == markdown
+
+
+def test_structured_tools_use_fastmcp_default_duplicate_output():
+    from blawx_mcp import server
+
+    tool = server.mcp._tool_manager._tools["blawx_health"]
+
+    converted = tool.fn_metadata.convert_result({"ok": True})
+
+    assert isinstance(converted, tuple)
+    content, structured = converted
+    assert len(content) == 1
+    assert '"ok"' in content[0].text
+    assert structured["ok"] is True
+
+
+def test_encoding_guide_list_and_quickstart_topics():
+    from blawx_mcp import server
+
+    async def run(topic):
+        return await server.mcp.call_tool("blawx_encoding_guide", {"topic": topic})
+
+    listed = asyncio.run(run("list"))[0].text
+    quickstart = asyncio.run(run("quickstart"))[0].text
+    default = asyncio.run(server.mcp.call_tool("blawx_encoding_guide", {}))[0].text
+
+    assert "# Guide Topics" in listed
+    assert "`ontology`:" in listed
+    assert "# Guide Topics" in quickstart
+    assert "First call `blawx_teams_list`" in default
+    assert "# Guide Topics" in default
+
+
+def test_encoding_guide_invalid_topic_points_to_quickstart_or_list():
+    from blawx_mcp import server
+
+    async def run():
+        return await server.mcp.call_tool("blawx_encoding_guide", {"topic": "bogus"})
+
+    converted = asyncio.run(run())
+
+    assert "Unknown guide topic `bogus`" in converted[0].text
+    assert "quickstart" in converted[0].text
+    assert "list" in converted[0].text

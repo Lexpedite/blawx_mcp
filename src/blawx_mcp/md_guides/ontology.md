@@ -18,6 +18,10 @@ objects.
 ## Rules
 
 - Parameters are typed using categories or supported datatypes (numbers, dates, datetimes, times, durations).
+- In Blawx JSON encodings, Date, Datetime, Time, and Duration parameters are still
+  represented as value blocks (`date_value`, `datetime_value`, `time_value`, and
+  `duration_value`). Do not use ISO string literals in relationship inputs; the
+  server converts the value blocks to backend timestamps.
 - When encoding, only use the ontology’s predicates, Undefined predicates will fail.
 - Negative versions of predicates are not required in the ontology
 - NLG components (i.e. prefix, postfix, postfixN) are required.
@@ -27,6 +31,13 @@ objects.
 - Example: "works_for(X,Y)" -> prefix "", postfix1 "works for", postfix2 ""
 
 ## MCP ontology write payloads
+
+Use `blawx_ontology_list` as the primary read tool for ontology discovery. It
+includes the category, relationship, and relationship-parameter details needed
+for encoding. `blawx_ontology_category_detail` and
+`blawx_ontology_relationship_detail` are focused lookups for a single element
+already present in the ontology list; they do not provide a separate broader
+view.
 
 The ontology write tools do not accept `blawx_json` workspaces. They accept
 plain JSON objects as `payload`.
@@ -43,13 +54,15 @@ Common payload shape:
 	"slug": "contract",
 	"short_description": "",
 	"nlg_prefix": "",
-	"nlg_postfix": "is a contract"
+	"nlg_postfix": "is a contract",
+	"nlg_pattern": "{1} is a contract"
 }
 ```
 
 Notes:
 
 - `nlg_postfix` is limited to 50 characters by the current API.
+- `nlg_pattern` shows how statements using the category appear in the coding interface and natural language explanations.
 - Category read responses may also include `long_description`.
 
 ### Relationship create/update
@@ -63,9 +76,12 @@ Common payload shape:
 	"name": "Estimated Expenditure",
 	"slug": "estimated_expenditure",
 	"short_description": "",
-	"nlg_prefix": ""
+	"nlg_prefix": "",
+	"nlg_pattern": "{1}'s estimated expenditure is {2}"
 }
 ```
+
+`nlg_pattern` shows how statements using the relationship appear in the coding interface and natural language explanations.
 
 ### Relationship parameter create/update
 
@@ -84,5 +100,5 @@ Common payload shape:
 Notes:
 
 - `type_id` must be the id of an ontology category.
-- Use `blawx_ontology_categories_list` or `blawx_ontology_category_detail` to find valid category ids.
-- `blawx_ontology_relationship_parameters_list` shows the `type_slug` currently associated with each parameter.
+- Use `blawx_ontology_list` to find valid category ids, or `blawx_ontology_category_detail` for a specific category.
+- `blawx_ontology_relationship_detail` shows the current relationship parameters, including the `type_slug` associated with each parameter.
