@@ -122,6 +122,10 @@ These tools give your coding agent the following capabilities:
 
 All project-scoped tools require both `team_slug` and `project_id`. Agents should always call `blawx_teams_list` first. If there is only one team, use that team's slug; if there are multiple teams and the user has not already identified one, ask the user which team to use. Then call `blawx_projects_list` with that `team_slug` and pass both `team_slug` and the returned `project_id` to every later ontology, legal-doc, question, fact-scenario, ask/answer, and encoding tool.
 
+Unless noted otherwise, MCP tools return a compact structured response with `status_code`, `ok`, and `body`. Some tools also include `workflow_hint` and `next_recommended_tool`. Request URLs, headers, params, and echoed payloads are intentionally omitted from tool output.
+
+Two tools intentionally return MCP text content blocks instead of structured JSON: `blawx_encoding_guide` and `blawx_legaldocparts_list`.
+
 1. Discover teams and choose a `team_slug`.
 2. Discover projects under that team and choose a `project_id`.
 3. Discover what the chosen project exposes (declared objects, questions, fact scenarios, ontology).
@@ -133,7 +137,7 @@ Here's a brief run-down of the available tools.
 
 ### Health check
 
-- `blawx_health`: verifies the Blawx app is reachable and returns status/body.
+- `blawx_health`: verifies the Blawx app is reachable and returns the compact status/body envelope.
 
 ### Discover Project Content
 

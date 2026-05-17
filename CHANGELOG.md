@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows Semantic Versioning.
 
+## [0.5.0] - 2026-05-17
+
+### Added
+- Added `blawx_declared_objects_list` so agents can inspect declared object symbols and trace them back to source legal text before writing facts, questions, or encodings.
+- Added `workflow_hint` and `next_recommended_tool` fields on structured discovery and legal-document responses so clients get explicit guidance about the next MCP call.
+- Added tests covering compact response envelopes, text-only MCP content tools, declared-object discovery, and removal of redundant read surfaces.
+
+### Changed
+- Pruned structured MCP tool responses to a compact envelope containing `status_code`, `ok`, and `body`, plus workflow guidance where relevant. Tool outputs no longer echo request URLs, headers, params, or submitted payloads back to the client.
+- Changed `blawx_encoding_guide` to return guide markdown as MCP text content only, and changed `blawx_legaldocparts_list` to return the legal-document hierarchy as a Markdown text content block rather than structured JSON.
+- Made `blawx_ontology_list` the primary ontology discovery surface and tightened README/guide guidance around using `blawx_legaldocparts_list` for hierarchy and `blawx_legaldocpart_detail` for full part fields.
+- Tightened `project_id` validation so project-scoped tools consistently reject non-positive integers with the same error message.
+- Bumped version to `0.5.0`.
+
+### Removed
+- Removed `blawx_project_detail` and the redundant ontology read helpers `blawx_ontology_categories_list`, `blawx_ontology_relationships_list`, `blawx_ontology_relationship_parameters_list`, and `blawx_ontology_relationship_parameter_detail` in favor of the consolidated discovery tools.
+
 ## [0.4.0] - 2026-04-26
 
 ### Added
