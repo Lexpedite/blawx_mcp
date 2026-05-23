@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import json
 import logging
 import os
 import sys
@@ -11,7 +10,7 @@ from typing import Any
 from urllib.parse import urljoin
 
 import httpx
-from mcp.types import CallToolResult, TextContent
+from mcp.types import CallToolResult
 from mcp.server.fastmcp import FastMCP
 
 from .config import get_settings
@@ -257,7 +256,7 @@ def _extract_cache_key(body: Any) -> str:
 def _answer_viewer_tool_result(result: dict[str, Any]) -> CallToolResult:
     return CallToolResult(
         _meta=_ANSWER_VIEWER_META,
-        content=[TextContent(type="text", text=json.dumps(result, indent=2, default=str))],
+        content=[],
         structuredContent=result,
     )
 

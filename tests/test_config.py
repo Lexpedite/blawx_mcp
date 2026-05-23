@@ -299,7 +299,7 @@ def test_ask_tools_serialize_answer_viewer_ui_metadata_in_tools_list():
     assert tools["blawx_question_ask_with_facts"]["_meta"] == expected
 
 
-def test_ask_tool_result_exposes_ui_meta_without_resource_link(monkeypatch):
+def test_ask_tool_result_exposes_ui_meta_and_structured_content_only(monkeypatch):
     from blawx_mcp import server
 
     async def fake_project_request_body(**kwargs):
@@ -326,9 +326,7 @@ def test_ask_tool_result_exposes_ui_meta_without_resource_link(monkeypatch):
 
     assert converted.meta == {"ui": {"resourceUri": "ui://blawx/answers", "visibility": ["model", "app"]}}
     assert converted.structuredContent["cache_key"] == "cache-123"
-    assert len(converted.content) == 1
-    assert converted.content[0].type == "text"
-    assert '"cache_key": "cache-123"' in converted.content[0].text
+    assert converted.content == []
 
 
 def test_answer_viewer_resource_registered():
