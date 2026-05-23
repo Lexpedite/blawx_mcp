@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import logging
 import os
 import sys
@@ -10,6 +11,7 @@ from typing import Any
 from urllib.parse import urljoin
 
 import httpx
+from mcp.types import CallToolResult, TextContent
 from mcp.server.fastmcp import FastMCP
 
 from .config import get_settings
@@ -250,6 +252,14 @@ def _extract_cache_key(body: Any) -> str:
             if isinstance(value, str) and value.strip():
                 return value.strip()
     raise RuntimeError("Response did not include a cache_key")
+
+
+def _answer_viewer_tool_result(result: dict[str, Any]) -> CallToolResult:
+    return CallToolResult(
+        _meta=_ANSWER_VIEWER_META,
+        content=[TextContent(type="text", text=json.dumps(result, indent=2, default=str))],
+        structuredContent=result,
+    )
 
 
 def _unexpected_response_result(
@@ -1132,24 +1142,28 @@ async def blawx_question_ask_with_fact_scenario(team_slug: str, project_id: int,
     try:
         cache_key = _extract_cache_key(body)
     except RuntimeError:
-        return _unexpected_response_result(
-            resp,
-            error="Expected cached ask response including cache_key, but Blawx returned a different response.",
-            note=(
-                "The raw Blawx response is preserved in `body`. This usually means the ask endpoint "
-                "returned an error payload, a non-cached response, or a response schema this MCP server "
-                "does not recognize."
-            ),
+        return _answer_viewer_tool_result(
+            _unexpected_response_result(
+                resp,
+                error="Expected cached ask response including cache_key, but Blawx returned a different response.",
+                note=(
+                    "The raw Blawx response is preserved in `body`. This usually means the ask endpoint "
+                    "returned an error payload, a non-cached response, or a response schema this MCP server "
+                    "does not recognize."
+                ),
+            )
         )
-    return {
-        "ok": resp["ok"],
-        "status_code": resp["status_code"],
-        "cache_key": cache_key,
-        "body": body,
-        "ttl_seconds": _extract_optional_int(body, "ttl_seconds"),
-        "created_at": _extract_optional_str(body, "created_at"),
-        "answer_count": _extract_optional_int(body, "answer_count"),
-    }
+    return _answer_viewer_tool_result(
+        {
+            "ok": resp["ok"],
+            "status_code": resp["status_code"],
+            "cache_key": cache_key,
+            "body": body,
+            "ttl_seconds": _extract_optional_int(body, "ttl_seconds"),
+            "created_at": _extract_optional_str(body, "created_at"),
+            "answer_count": _extract_optional_int(body, "answer_count"),
+        }
+    )
 
 
 @mcp.tool(meta=_ANSWER_VIEWER_META)
@@ -1239,24 +1253,28 @@ async def blawx_question_ask_with_facts(team_slug: str, project_id: int, questio
     try:
         cache_key = _extract_cache_key(body)
     except RuntimeError:
-        return _unexpected_response_result(
-            resp,
-            error="Expected cached ask response including cache_key, but Blawx returned a different response.",
-            note=(
-                "The raw Blawx response is preserved in `body`. This usually means the ask endpoint "
-                "returned an error payload, a non-cached response, or a response schema this MCP server "
-                "does not recognize."
-            ),
+        return _answer_viewer_tool_result(
+            _unexpected_response_result(
+                resp,
+                error="Expected cached ask response including cache_key, but Blawx returned a different response.",
+                note=(
+                    "The raw Blawx response is preserved in `body`. This usually means the ask endpoint "
+                    "returned an error payload, a non-cached response, or a response schema this MCP server "
+                    "does not recognize."
+                ),
+            )
         )
-    return {
-        "ok": resp["ok"],
-        "status_code": resp["status_code"],
-        "cache_key": cache_key,
-        "body": body,
-        "ttl_seconds": _extract_optional_int(body, "ttl_seconds"),
-        "created_at": _extract_optional_str(body, "created_at"),
-        "answer_count": _extract_optional_int(body, "answer_count"),
-    }
+    return _answer_viewer_tool_result(
+        {
+            "ok": resp["ok"],
+            "status_code": resp["status_code"],
+            "cache_key": cache_key,
+            "body": body,
+            "ttl_seconds": _extract_optional_int(body, "ttl_seconds"),
+            "created_at": _extract_optional_str(body, "created_at"),
+            "answer_count": _extract_optional_int(body, "answer_count"),
+        }
+    )
 
 
 @mcp.tool()
