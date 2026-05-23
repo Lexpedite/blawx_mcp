@@ -286,6 +286,40 @@ def test_ask_tools_expose_answer_viewer_ui_metadata():
     assert server.mcp._tool_manager._tools["blawx_question_ask_with_facts"].meta == expected
 
 
+def test_ask_tool_result_includes_answer_viewer_resource_link(monkeypatch):
+    from blawx_mcp import server
+
+    async def fake_project_request_body(**kwargs):
+        return {
+            "status_code": 200,
+            "ok": True,
+            "body": {
+                "cache_key": "cache-123",
+                "ttl_seconds": 60,
+                "created_at": "2026-05-23T12:00:00Z",
+                "answer_count": 2,
+            },
+        }
+
+    monkeypatch.setattr(server, "_project_request_body", fake_project_request_body)
+
+    async def run():
+        return await server.mcp.call_tool(
+            "blawx_question_ask_with_fact_scenario",
+            {"team_slug": "team", "project_id": 1, "question_id": 2, "fact_scenario_id": 3},
+        )
+
+    converted = asyncio.run(run())
+
+    assert converted.meta == {"ui": {"resourceUri": "ui://blawx/answers"}}
+    assert converted.structuredContent["cache_key"] == "cache-123"
+    assert converted.content[0].type == "resource_link"
+    assert str(converted.content[0].uri) == "ui://blawx/answers"
+    assert converted.content[0].mimeType == "text/html;profile=mcp-app"
+    assert converted.content[1].type == "text"
+    assert '"cache_key": "cache-123"' in converted.content[1].text
+
+
 def test_answer_viewer_resource_registered():
     from blawx_mcp import server
 
