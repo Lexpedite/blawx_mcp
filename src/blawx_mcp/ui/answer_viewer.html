@@ -1,0 +1,649 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Blawx Answers</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f8fafc;
+      --panel: #ffffff;
+      --text: #172033;
+      --muted: #5d6679;
+      --line: #d8dde8;
+      --accent: #246b5a;
+      --accent-weak: #e6f2ef;
+      --danger: #a53131;
+      --danger-weak: #f8e7e7;
+      --code: #111827;
+      --code-bg: #eef2f7;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111827;
+        --panel: #182235;
+        --text: #edf2f7;
+        --muted: #a8b3c7;
+        --line: #324056;
+        --accent: #72c7b4;
+        --accent-weak: #193d38;
+        --danger: #ff9b9b;
+        --danger-weak: #4b2020;
+        --code: #f8fafc;
+        --code-bg: #0f172a;
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    button {
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--panel);
+      color: var(--text);
+      cursor: pointer;
+      font: inherit;
+      padding: 6px 10px;
+    }
+
+    button:hover {
+      border-color: var(--accent);
+    }
+
+    button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+
+    button.link {
+      min-height: 0;
+      border: 0;
+      background: transparent;
+      color: var(--accent);
+      padding: 0;
+      text-align: left;
+    }
+
+    pre {
+      margin: 8px 0 0;
+      padding: 10px;
+      overflow: auto;
+      border-radius: 6px;
+      background: var(--code-bg);
+      color: var(--code);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .app {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 18px;
+    }
+
+    .header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 14px;
+    }
+
+    .title {
+      margin: 0;
+      font-size: 20px;
+      line-height: 1.2;
+    }
+
+    .subtitle {
+      margin-top: 4px;
+      color: var(--muted);
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 14px;
+      margin: 12px 0;
+    }
+
+    .error {
+      background: var(--danger-weak);
+      border-color: var(--danger);
+    }
+
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .status-item {
+      border-left: 3px solid var(--accent);
+      background: var(--accent-weak);
+      border-radius: 6px;
+      padding: 8px 10px;
+      min-width: 0;
+    }
+
+    .label {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 2px;
+    }
+
+    .value {
+      overflow-wrap: anywhere;
+      font-weight: 600;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin: 12px 0;
+    }
+
+    .tree {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .node {
+      border-top: 1px solid var(--line);
+      padding: 10px 0;
+    }
+
+    .node:first-child {
+      border-top: 0;
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .chevron {
+      width: 26px;
+      height: 26px;
+      flex: 0 0 26px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+    }
+
+    .row-title {
+      min-width: 0;
+      font-weight: 700;
+    }
+
+    .summary {
+      color: var(--muted);
+      overflow-wrap: anywhere;
+    }
+
+    .children {
+      display: none;
+      margin-left: 34px;
+      padding: 8px 0 0 12px;
+      border-left: 2px solid var(--line);
+    }
+
+    .expanded > .children {
+      display: block;
+    }
+
+    .expanded > .row .chevron {
+      transform: rotate(90deg);
+    }
+
+    .bindings {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 4px 0 10px;
+    }
+
+    .bindings th,
+    .bindings td {
+      border-bottom: 1px solid var(--line);
+      padding: 5px 8px;
+      vertical-align: top;
+      text-align: left;
+    }
+
+    .bindings th {
+      width: 30%;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 8px 0;
+    }
+
+    .part-output {
+      min-height: 44px;
+    }
+
+    .empty {
+      color: var(--muted);
+      padding: 8px 0;
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <div class="header">
+      <div>
+        <h1 class="title">Blawx Answers</h1>
+        <div id="subtitle" class="subtitle">Waiting for the question result...</div>
+      </div>
+      <button id="refresh" class="primary" type="button">Refresh Answers</button>
+    </div>
+    <section id="status" class="panel"></section>
+    <section id="answers" class="panel"></section>
+  </main>
+
+  <script>
+    const state = {
+      toolInput: null,
+      toolResult: null,
+      answersLoaded: false,
+      pendingCalls: new Map(),
+      nextId: 1
+    };
+
+    const partTools = [
+      ["attributes", "blawx_get_attributes_part", "Attributes"],
+      ["explanation", "blawx_get_explanation_part", "Explanation"],
+      ["model", "blawx_get_model_part", "Model"],
+      ["constraint_satisfaction", "blawx_get_constraint_satisfaction_part", "Constraint Satisfaction"]
+    ];
+
+    const el = {
+      subtitle: document.getElementById("subtitle"),
+      status: document.getElementById("status"),
+      answers: document.getElementById("answers"),
+      refresh: document.getElementById("refresh")
+    };
+
+    function text(value) {
+      if (value === null || value === undefined || value === "") return "Not provided";
+      if (typeof value === "string") return value;
+      return JSON.stringify(value, null, 2);
+    }
+
+    function clear(node) {
+      while (node.firstChild) node.removeChild(node.firstChild);
+    }
+
+    function appendText(parent, tag, value, className) {
+      const node = document.createElement(tag);
+      node.textContent = value;
+      if (className) node.className = className;
+      parent.appendChild(node);
+      return node;
+    }
+
+    function appendPre(parent, value) {
+      const pre = document.createElement("pre");
+      pre.textContent = text(value);
+      parent.appendChild(pre);
+      return pre;
+    }
+
+    function showMessage(target, message, className) {
+      clear(target);
+      const p = document.createElement("div");
+      p.className = className || "empty";
+      p.textContent = message;
+      target.appendChild(p);
+    }
+
+    function makeStatusItem(label, value) {
+      const item = document.createElement("div");
+      item.className = "status-item";
+      appendText(item, "span", label, "label");
+      appendText(item, "div", text(value), "value");
+      return item;
+    }
+
+    function renderStatus() {
+      clear(el.status);
+      const result = state.toolResult || {};
+      const ok = Boolean(result.ok && result.cache_key);
+
+      if (!state.toolResult) {
+        showMessage(el.status, "The MCP host has not delivered the ask result yet.");
+        return;
+      }
+
+      if (!ok) {
+        el.status.classList.add("error");
+        appendText(el.status, "strong", "The question did not produce a cached response.");
+        appendPre(el.status, result.error || result.body || result);
+        return;
+      }
+
+      el.status.classList.remove("error");
+      const grid = document.createElement("div");
+      grid.className = "status-grid";
+      grid.appendChild(makeStatusItem("Cache key", result.cache_key));
+      grid.appendChild(makeStatusItem("Answers", result.answer_count));
+      grid.appendChild(makeStatusItem("Created", result.created_at));
+      grid.appendChild(makeStatusItem("TTL seconds", result.ttl_seconds));
+      el.status.appendChild(grid);
+      el.subtitle.textContent = "Open an answer to explore bindings and explanations.";
+    }
+
+    function baseArgs(extra) {
+      const input = state.toolInput || {};
+      const result = state.toolResult || {};
+      return Object.assign({
+        team_slug: input.team_slug,
+        project_id: input.project_id,
+        question_id: input.question_id,
+        cache_key: result.cache_key
+      }, extra || {});
+    }
+
+    async function callTool(name, args) {
+      if (window.openai && typeof window.openai.callTool === "function") {
+        return window.openai.callTool(name, args);
+      }
+
+      if (window.blawxHostApp && typeof window.blawxHostApp.callServerTool === "function") {
+        return window.blawxHostApp.callServerTool({ name, arguments: args });
+      }
+
+      const id = state.nextId++;
+      const message = { jsonrpc: "2.0", id, method: "tools/call", params: { name, arguments: args } };
+      const promise = new Promise((resolve, reject) => {
+        state.pendingCalls.set(id, { resolve, reject });
+        window.setTimeout(() => {
+          if (state.pendingCalls.has(id)) {
+            state.pendingCalls.delete(id);
+            reject(new Error("Timed out waiting for the MCP host to answer tools/call."));
+          }
+        }, 60000);
+      });
+      window.parent.postMessage(message, "*");
+      return promise;
+    }
+
+    function unwrapToolResult(result) {
+      if (!result) return result;
+      if (result.structuredContent) return result.structuredContent;
+      if (result.structured_content) return result.structured_content;
+      if (result.content && result.content.length === 1 && result.content[0].text) {
+        try {
+          return JSON.parse(result.content[0].text);
+        } catch (_err) {
+          return { body: result.content[0].text };
+        }
+      }
+      return result;
+    }
+
+    function makeDisclosure(title, summary) {
+      const li = document.createElement("li");
+      li.className = "node";
+
+      const row = document.createElement("div");
+      row.className = "row";
+      const button = document.createElement("button");
+      button.className = "chevron";
+      button.type = "button";
+      button.setAttribute("aria-label", "Expand");
+      button.textContent = ">";
+      const label = document.createElement("div");
+      label.className = "row-title";
+      label.textContent = title;
+      row.appendChild(button);
+      row.appendChild(label);
+      if (summary) appendText(row, "div", summary, "summary");
+
+      const children = document.createElement("div");
+      children.className = "children";
+      li.appendChild(row);
+      li.appendChild(children);
+
+      button.addEventListener("click", () => {
+        li.classList.toggle("expanded");
+        button.setAttribute("aria-label", li.classList.contains("expanded") ? "Collapse" : "Expand");
+      });
+
+      return { li, row, button, children };
+    }
+
+    function renderBindings(parent, bindings) {
+      const table = document.createElement("table");
+      table.className = "bindings";
+
+      if (!bindings) {
+        appendText(parent, "div", "No bindings.", "empty");
+        return;
+      }
+
+      let parsed = bindings;
+      if (typeof bindings === "string") {
+        try {
+          parsed = JSON.parse(bindings);
+        } catch (_err) {
+          appendText(parent, "div", bindings, "summary");
+          return;
+        }
+      }
+
+      if (typeof parsed !== "object" || Array.isArray(parsed) || Object.keys(parsed).length === 0) {
+        appendText(parent, "div", "No bindings.", "empty");
+        return;
+      }
+
+      Object.entries(parsed).forEach(([key, value]) => {
+        const row = document.createElement("tr");
+        appendText(row, "th", key);
+        appendText(row, "td", text(value));
+        table.appendChild(row);
+      });
+      parent.appendChild(table);
+    }
+
+    async function loadAnswers() {
+      const result = state.toolResult || {};
+      if (!result.cache_key) {
+        showMessage(el.answers, "No cached answer response is available.");
+        return;
+      }
+
+      showMessage(el.answers, "Loading answer summaries...");
+      try {
+        const response = unwrapToolResult(await callTool("blawx_list_answers", baseArgs()));
+        renderAnswers(response);
+      } catch (err) {
+        clear(el.answers);
+        appendText(el.answers, "strong", "Unable to load answers.");
+        appendPre(el.answers, err.message || err);
+      }
+    }
+
+    function renderAnswers(response) {
+      clear(el.answers);
+      const answers = response && Array.isArray(response.answers) ? response.answers : [];
+      if (!answers.length) {
+        showMessage(el.answers, "No answers.");
+        return;
+      }
+
+      const list = document.createElement("ul");
+      list.className = "tree";
+      answers.forEach((answer, position) => {
+        const answerIndex = Number.isInteger(answer.answer_index) ? answer.answer_index : position;
+        const item = makeDisclosure("Answer " + (position + 1), answer.explanation_count + " explanations");
+        renderBindings(item.children, answer.bindings);
+        const explanationHost = document.createElement("div");
+        item.children.appendChild(explanationHost);
+        item.button.addEventListener("click", () => {
+          if (item.li.classList.contains("expanded") && !item.li.dataset.loaded) {
+            item.li.dataset.loaded = "true";
+            loadExplanations(answerIndex, answer.bindings, explanationHost);
+          }
+        });
+        list.appendChild(item.li);
+      });
+      el.answers.appendChild(list);
+    }
+
+    async function loadExplanations(answerIndex, bindings, target) {
+      showMessage(target, "Loading explanations...");
+      try {
+        const response = unwrapToolResult(await callTool("blawx_list_explanations", baseArgs({
+          answer_index: answerIndex
+        })));
+        renderExplanations(answerIndex, bindings, target, response);
+      } catch (err) {
+        clear(target);
+        appendText(target, "strong", "Unable to load explanations.");
+        appendPre(target, err.message || err);
+      }
+    }
+
+    function renderExplanations(answerIndex, bindings, target, response) {
+      clear(target);
+      const explanations = response && Array.isArray(response.explanations) ? response.explanations : [];
+      if (!explanations.length) {
+        showMessage(target, "No explanations available.");
+        return;
+      }
+
+      const list = document.createElement("ul");
+      list.className = "tree";
+      explanations.forEach((explanation, position) => {
+        const explanationIndex = Number.isInteger(explanation.explanation_index) ? explanation.explanation_index : position;
+        const item = makeDisclosure("Explanation " + (position + 1), "Open parts");
+        renderPartTabs(answerIndex, explanationIndex, item.children);
+        list.appendChild(item.li);
+      });
+      target.appendChild(list);
+    }
+
+    function renderPartTabs(answerIndex, explanationIndex, target) {
+      const tabs = document.createElement("div");
+      tabs.className = "tabs";
+      const output = document.createElement("div");
+      output.className = "part-output";
+
+      partTools.forEach(([part, tool, label]) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = label;
+        button.addEventListener("click", () => loadPart(tool, part, answerIndex, explanationIndex, output));
+        tabs.appendChild(button);
+      });
+
+      target.appendChild(tabs);
+      target.appendChild(output);
+      loadPart("blawx_get_attributes_part", "attributes", answerIndex, explanationIndex, output);
+    }
+
+    async function loadPart(toolName, partName, answerIndex, explanationIndex, target) {
+      showMessage(target, "Loading " + partName.replace("_", " ") + "...");
+      try {
+        const response = unwrapToolResult(await callTool(toolName, baseArgs({
+          answer_index: answerIndex,
+          explanation_index: explanationIndex
+        })));
+        clear(target);
+        const data = response && Object.prototype.hasOwnProperty.call(response, "data") ? response.data : response;
+        if (Array.isArray(data)) {
+          appendPre(target, data.join("\n"));
+        } else {
+          appendPre(target, data);
+        }
+      } catch (err) {
+        clear(target);
+        appendText(target, "strong", "Unable to load " + partName.replace("_", " ") + ".");
+        appendPre(target, err.message || err);
+      }
+    }
+
+    function receiveToolInput(input) {
+      state.toolInput = input || state.toolInput;
+      maybeRender();
+    }
+
+    function receiveToolResult(result) {
+      state.toolResult = unwrapToolResult(result);
+      maybeRender();
+    }
+
+    function maybeRender() {
+      renderStatus();
+      if (state.toolInput && state.toolResult && state.toolResult.cache_key && !state.answersLoaded) {
+        state.answersLoaded = true;
+        loadAnswers();
+      }
+    }
+
+    window.addEventListener("message", (event) => {
+      const message = event.data || {};
+      if (message.id && state.pendingCalls.has(message.id)) {
+        const pending = state.pendingCalls.get(message.id);
+        state.pendingCalls.delete(message.id);
+        if (message.error) pending.reject(message.error);
+        else pending.resolve(message.result);
+        return;
+      }
+
+      const method = String(message.method || "");
+      const params = message.params || {};
+      if (method.endsWith("tool-input")) receiveToolInput(params.arguments || params);
+      if (method.endsWith("tool-result")) receiveToolResult(params.structuredContent || params.structured_content || params);
+    });
+
+    el.refresh.addEventListener("click", () => {
+      state.answersLoaded = true;
+      loadAnswers();
+    });
+
+    if (window.openai) {
+      receiveToolInput(window.openai.toolInput);
+      receiveToolResult(window.openai.toolOutput);
+      window.addEventListener("openai:set_globals", () => {
+        receiveToolInput(window.openai.toolInput);
+        receiveToolResult(window.openai.toolOutput);
+      });
+    }
+
+    window.parent.postMessage({ jsonrpc: "2.0", method: "ui/initialize", params: {} }, "*");
+    window.parent.postMessage({ jsonrpc: "2.0", method: "ui/notifications/initialized", params: {} }, "*");
+    maybeRender();
+  </script>
+</body>
+</html>

@@ -27,7 +27,7 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-blawx_mcp = ["md_guides/*.md"]
+blawx_mcp = ["md_guides/*.md", "ui/*.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

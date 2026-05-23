@@ -3,6 +3,10 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import tomllib
+from importlib import resources
+from pathlib import Path
+
 import pytest
 
 from blawx_mcp.config import Settings, _settings_override, get_settings, settings_context
@@ -271,6 +275,50 @@ def test_mcp_tools_keep_structured_output_schemas():
             assert tool.fn_metadata.output_schema is None, name
         else:
             assert tool.fn_metadata.output_schema is not None, name
+
+
+def test_ask_tools_expose_answer_viewer_ui_metadata():
+    from blawx_mcp import server
+
+    expected = {"ui": {"resourceUri": "ui://blawx/answers"}}
+
+    assert server.mcp._tool_manager._tools["blawx_question_ask_with_fact_scenario"].meta == expected
+    assert server.mcp._tool_manager._tools["blawx_question_ask_with_facts"].meta == expected
+
+
+def test_answer_viewer_resource_registered():
+    from blawx_mcp import server
+
+    resource = server.mcp._resource_manager._resources["ui://blawx/answers"]
+
+    assert resource.name == "blawx-answer-viewer"
+    assert resource.mime_type == "text/html;profile=mcp-app"
+
+
+def test_answer_viewer_resource_returns_html():
+    from blawx_mcp import server
+
+    async def run():
+        return await server.mcp.read_resource("ui://blawx/answers")
+
+    contents = asyncio.run(run())
+
+    assert len(contents) == 1
+    assert contents[0].mime_type == "text/html;profile=mcp-app"
+    assert "<title>Blawx Answers</title>" in contents[0].content
+    assert "receiveToolResult" in contents[0].content
+    assert "loadExplanations" in contents[0].content
+    assert "loadPart" in contents[0].content
+
+
+def test_answer_viewer_packaged_as_package_data():
+    pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+
+    package_data = pyproject["tool"]["setuptools"]["package-data"]["blawx_mcp"]
+    ui_path = resources.files("blawx_mcp") / "ui" / "answer_viewer.html"
+
+    assert "ui/*.html" in package_data
+    assert ui_path.is_file()
 
 
 def test_encoding_guide_returns_content_only():

@@ -5,6 +5,7 @@ import asyncio
 import logging
 import os
 import sys
+from importlib import resources
 from typing import Any
 from urllib.parse import urljoin
 
@@ -35,6 +36,9 @@ from .schemas import (
 
 _TEAM_ID_CACHE: dict[tuple[str, str], int] = {}
 _PROJECT_ID_ERROR = "project_id must be a positive integer. Discover valid ids with blawx_projects_list."
+_ANSWER_VIEWER_RESOURCE_URI = "ui://blawx/answers"
+_ANSWER_VIEWER_MIME_TYPE = "text/html;profile=mcp-app"
+_ANSWER_VIEWER_META = {"ui": {"resourceUri": _ANSWER_VIEWER_RESOURCE_URI}}
 
 
 def _env_int(name: str, default: int) -> int:
@@ -62,6 +66,26 @@ mcp = FastMCP(
     port=_port,
     log_level=_log_level if _log_level else "INFO",
 )
+
+
+def _read_ui_resource(filename: str) -> str:
+    try:
+        return (resources.files("blawx_mcp") / "ui" / filename).read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return f"<!doctype html><title>Missing UI</title><p>Could not find {filename}.</p>"
+
+
+@mcp.resource(
+    _ANSWER_VIEWER_RESOURCE_URI,
+    name="blawx-answer-viewer",
+    title="Blawx Answer Viewer",
+    description="Explore Blawx cached question answers and explanations.",
+    mime_type=_ANSWER_VIEWER_MIME_TYPE,
+)
+async def blawx_answer_viewer_resource() -> str:
+    """Standalone MCP Apps UI for exploring cached Blawx answer responses."""
+
+    return _read_ui_resource("answer_viewer.html")
 
 
 @mcp.tool(structured_output=False)
@@ -1073,7 +1097,7 @@ async def blawx_question_delete(team_slug: str, project_id: int, question_id: in
     )
 
 
-@mcp.tool()
+@mcp.tool(meta=_ANSWER_VIEWER_META)
 async def blawx_question_ask_with_fact_scenario(team_slug: str, project_id: int, question_id: int, fact_scenario_id: int) -> dict[str, Any]:
     """Ask a question using a stored fact scenario.
 
@@ -1126,7 +1150,7 @@ async def blawx_question_ask_with_fact_scenario(team_slug: str, project_id: int,
     }
 
 
-@mcp.tool()
+@mcp.tool(meta=_ANSWER_VIEWER_META)
 async def blawx_question_ask_with_facts(team_slug: str, project_id: int, question_id: int, facts: AskFactsPayload) -> dict[str, Any]:
     """Ask a question using a structured facts payload.
 
