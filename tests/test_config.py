@@ -280,13 +280,26 @@ def test_mcp_tools_keep_structured_output_schemas():
 def test_ask_tools_expose_answer_viewer_ui_metadata():
     from blawx_mcp import server
 
-    expected = {"ui": {"resourceUri": "ui://blawx/answers"}}
+    expected = {"ui": {"resourceUri": "ui://blawx/answers", "visibility": ["model", "app"]}}
 
     assert server.mcp._tool_manager._tools["blawx_question_ask_with_fact_scenario"].meta == expected
     assert server.mcp._tool_manager._tools["blawx_question_ask_with_facts"].meta == expected
 
 
-def test_ask_tool_result_includes_answer_viewer_resource_link(monkeypatch):
+def test_ask_tools_serialize_answer_viewer_ui_metadata_in_tools_list():
+    from blawx_mcp import server
+
+    async def run():
+        return await server.mcp.list_tools()
+
+    tools = {tool.name: tool.model_dump(by_alias=True, exclude_none=True) for tool in asyncio.run(run())}
+    expected = {"ui": {"resourceUri": "ui://blawx/answers", "visibility": ["model", "app"]}}
+
+    assert tools["blawx_question_ask_with_fact_scenario"]["_meta"] == expected
+    assert tools["blawx_question_ask_with_facts"]["_meta"] == expected
+
+
+def test_ask_tool_result_keeps_standard_structured_output(monkeypatch):
     from blawx_mcp import server
 
     async def fake_project_request_body(**kwargs):
@@ -311,13 +324,12 @@ def test_ask_tool_result_includes_answer_viewer_resource_link(monkeypatch):
 
     converted = asyncio.run(run())
 
-    assert converted.meta == {"ui": {"resourceUri": "ui://blawx/answers"}}
-    assert converted.structuredContent["cache_key"] == "cache-123"
-    assert converted.content[0].type == "resource_link"
-    assert str(converted.content[0].uri) == "ui://blawx/answers"
-    assert converted.content[0].mimeType == "text/html;profile=mcp-app"
-    assert converted.content[1].type == "text"
-    assert '"cache_key": "cache-123"' in converted.content[1].text
+    assert isinstance(converted, tuple)
+    content, structured = converted
+    assert structured["cache_key"] == "cache-123"
+    assert len(content) == 1
+    assert content[0].type == "text"
+    assert '"cache_key": "cache-123"' in content[0].text
 
 
 def test_answer_viewer_resource_registered():
