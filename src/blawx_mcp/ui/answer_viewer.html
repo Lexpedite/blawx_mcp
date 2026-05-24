@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Blawx Answers</title>
+  <title>Review Blawx Responses</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -64,12 +64,6 @@
       border-color: var(--accent);
     }
 
-    button.primary {
-      background: var(--accent);
-      border-color: var(--accent);
-      color: white;
-    }
-
     button.link {
       min-height: 0;
       border: 0;
@@ -97,10 +91,6 @@
     }
 
     .header {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 16px;
       margin-bottom: 14px;
     }
 
@@ -108,11 +98,6 @@
       margin: 0;
       font-size: 20px;
       line-height: 1.2;
-    }
-
-    .subtitle {
-      margin-top: 4px;
-      color: var(--muted);
     }
 
     .panel {
@@ -126,41 +111,6 @@
     .error {
       background: var(--danger-weak);
       border-color: var(--danger);
-    }
-
-    .status-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 10px;
-      margin-top: 12px;
-    }
-
-    .status-item {
-      border-left: 3px solid var(--accent);
-      background: var(--accent-weak);
-      border-radius: 6px;
-      padding: 8px 10px;
-      min-width: 0;
-    }
-
-    .label {
-      display: block;
-      color: var(--muted);
-      font-size: 12px;
-      margin-bottom: 2px;
-    }
-
-    .value {
-      overflow-wrap: anywhere;
-      font-weight: 600;
-    }
-
-    .toolbar {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 8px;
-      margin: 12px 0;
     }
 
     .tree {
@@ -220,35 +170,24 @@
       transform: rotate(90deg);
     }
 
-    .bindings {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 4px 0 10px;
+    .bindings,
+    .simple-list {
+      margin: 8px 0 12px;
+      padding-left: 20px;
     }
 
-    .bindings th,
-    .bindings td {
-      border-bottom: 1px solid var(--line);
-      padding: 5px 8px;
-      vertical-align: top;
-      text-align: left;
+    .bindings li,
+    .simple-list li {
+      margin: 4px 0;
     }
 
-    .bindings th {
-      width: 30%;
-      color: var(--muted);
-      font-weight: 600;
+    .binding-name {
+      font-weight: 700;
     }
 
-    .tabs {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin: 8px 0;
-    }
-
-    .part-output {
-      min-height: 44px;
+    .inline-html a {
+      color: var(--accent);
+      text-decoration: underline;
     }
 
     .empty {
@@ -260,11 +199,7 @@
 <body>
   <main class="app">
     <div class="header">
-      <div>
-        <h1 class="title">Blawx Answers</h1>
-        <div id="subtitle" class="subtitle">Waiting for the question result...</div>
-      </div>
-      <button id="refresh" class="primary" type="button">Refresh Answers</button>
+      <h1 class="title">Review Blawx Responses</h1>
     </div>
     <section id="status" class="panel"></section>
     <section id="answers" class="panel"></section>
@@ -287,10 +222,8 @@
     ];
 
     const el = {
-      subtitle: document.getElementById("subtitle"),
       status: document.getElementById("status"),
-      answers: document.getElementById("answers"),
-      refresh: document.getElementById("refresh")
+      answers: document.getElementById("answers")
     };
 
     function text(value) {
@@ -326,16 +259,9 @@
       target.appendChild(p);
     }
 
-    function makeStatusItem(label, value) {
-      const item = document.createElement("div");
-      item.className = "status-item";
-      appendText(item, "span", label, "label");
-      appendText(item, "div", text(value), "value");
-      return item;
-    }
-
     function renderStatus() {
       clear(el.status);
+      el.status.hidden = false;
       const result = state.toolResult || {};
       const ok = Boolean(result.ok && result.cache_key);
 
@@ -352,14 +278,7 @@
       }
 
       el.status.classList.remove("error");
-      const grid = document.createElement("div");
-      grid.className = "status-grid";
-      grid.appendChild(makeStatusItem("Cache key", result.cache_key));
-      grid.appendChild(makeStatusItem("Answers", result.answer_count));
-      grid.appendChild(makeStatusItem("Created", result.created_at));
-      grid.appendChild(makeStatusItem("TTL seconds", result.ttl_seconds));
-      el.status.appendChild(grid);
-      el.subtitle.textContent = "Open an answer to explore bindings and explanations.";
+      el.status.hidden = true;
     }
 
     function baseArgs(extra) {
@@ -445,10 +364,154 @@
       return { li, row, button, children };
     }
 
-    function renderBindings(parent, bindings) {
-      const table = document.createElement("table");
-      table.className = "bindings";
+    function makeStaticTreeItem(content) {
+      const li = document.createElement("li");
+      li.className = "node";
+      const row = document.createElement("div");
+      row.className = "row";
+      const spacer = document.createElement("span");
+      spacer.className = "chevron";
+      const label = document.createElement("div");
+      label.className = "row-title inline-html";
+      appendInlineHtml(label, content);
+      row.appendChild(spacer);
+      row.appendChild(label);
+      li.appendChild(row);
+      return li;
+    }
 
+    function appendInlineHtml(parent, value) {
+      const raw = text(value);
+      const template = document.createElement("template");
+      template.innerHTML = raw;
+      sanitizeHtml(template.content);
+      if (template.content.childNodes.length) {
+        parent.appendChild(template.content.cloneNode(true));
+      } else {
+        parent.textContent = raw;
+      }
+    }
+
+    function sanitizeHtml(root) {
+      const allowedTags = new Set(["A", "STRONG", "B", "EM", "I", "CODE", "SPAN", "BR"]);
+      Array.from(root.querySelectorAll("*")).forEach((node) => {
+        if (!allowedTags.has(node.tagName)) {
+          node.replaceWith(document.createTextNode(node.textContent || ""));
+          return;
+        }
+
+        Array.from(node.attributes).forEach((attr) => {
+          const name = attr.name.toLowerCase();
+          if (node.tagName === "A" && name === "href") {
+            const href = attr.value || "";
+            if (/^(https?:|mailto:|#|\/)/i.test(href)) {
+              node.setAttribute("target", "_blank");
+              node.setAttribute("rel", "noopener noreferrer");
+              return;
+            }
+          }
+          node.removeAttribute(attr.name);
+        });
+      });
+    }
+
+    function normalizeLineItems(data) {
+      if (Array.isArray(data)) return data;
+      if (typeof data === "string") {
+        return data.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+      }
+      if (data === null || data === undefined) return [];
+      return [data];
+    }
+
+    function renderSimpleList(parent, data) {
+      const items = normalizeLineItems(data);
+      if (!items.length) {
+        appendText(parent, "div", "No data.", "empty");
+        return;
+      }
+
+      const list = document.createElement("ul");
+      list.className = "simple-list";
+      items.forEach((item) => {
+        const li = document.createElement("li");
+        li.textContent = text(item);
+        list.appendChild(li);
+      });
+      parent.appendChild(list);
+    }
+
+    function parseExplanationTree(data) {
+      if (Array.isArray(data)) {
+        return data.map((item) => normalizeExplanationNode(item));
+      }
+      if (typeof data !== "string") return [normalizeExplanationNode(data)];
+
+      const root = [];
+      const stack = [{ depth: -1, children: root }];
+      data.split(/\r?\n/).forEach((line) => {
+        if (!line.trim()) return;
+        const indent = (line.match(/^\s*/) || [""])[0].replace(/\t/g, "  ").length;
+        const depth = Math.floor(indent / 2);
+        const label = line.trim().replace(/^[-*]\s+/, "").replace(/^\d+[.)]\s+/, "");
+        const node = { label, children: [] };
+
+        while (stack.length > 1 && stack[stack.length - 1].depth >= depth) stack.pop();
+        stack[stack.length - 1].children.push(node);
+        stack.push({ depth, children: node.children });
+      });
+      return root;
+    }
+
+    function normalizeExplanationNode(item) {
+      if (typeof item === "string" || typeof item === "number" || typeof item === "boolean") {
+        return { label: item, children: [] };
+      }
+      if (!item || typeof item !== "object") {
+        return { label: text(item), children: [] };
+      }
+
+      const label = item.text || item.label || item.summary || item.content || item.html || item.name || item.title || item.statement || item;
+      const rawChildren = item.children || item.items || item.nodes || item.reasons || [];
+      return {
+        label,
+        children: Array.isArray(rawChildren) ? rawChildren.map((child) => normalizeExplanationNode(child)) : []
+      };
+    }
+
+    function renderExplanationTree(parent, data) {
+      const nodes = parseExplanationTree(data);
+      if (!nodes.length) {
+        appendText(parent, "div", "No explanation data.", "empty");
+        return;
+      }
+
+      const list = document.createElement("ul");
+      list.className = "tree";
+      renderExplanationNodes(list, nodes);
+      parent.appendChild(list);
+    }
+
+    function renderExplanationNodes(parentList, nodes) {
+      nodes.forEach((node) => {
+        if (node.children && node.children.length) {
+          const item = makeDisclosure("", "");
+          const label = item.row.querySelector(".row-title");
+          label.classList.add("inline-html");
+          clear(label);
+          appendInlineHtml(label, node.label);
+          const childList = document.createElement("ul");
+          childList.className = "tree";
+          renderExplanationNodes(childList, node.children);
+          item.children.appendChild(childList);
+          parentList.appendChild(item.li);
+        } else {
+          parentList.appendChild(makeStaticTreeItem(node.label));
+        }
+      });
+    }
+
+    function renderBindings(parent, bindings) {
       if (!bindings) {
         appendText(parent, "div", "No bindings.", "empty");
         return;
@@ -459,7 +522,7 @@
         try {
           parsed = JSON.parse(bindings);
         } catch (_err) {
-          appendText(parent, "div", bindings, "summary");
+          appendText(parent, "div", bindings, "empty");
           return;
         }
       }
@@ -469,13 +532,16 @@
         return;
       }
 
+      const list = document.createElement("ul");
+      list.className = "bindings";
       Object.entries(parsed).forEach(([key, value]) => {
-        const row = document.createElement("tr");
-        appendText(row, "th", key);
-        appendText(row, "td", text(value));
-        table.appendChild(row);
+        const item = document.createElement("li");
+        const name = appendText(item, "span", key + ": ", "binding-name");
+        name.setAttribute("aria-label", key);
+        item.appendChild(document.createTextNode(text(value)));
+        list.appendChild(item);
       });
-      parent.appendChild(table);
+      parent.appendChild(list);
     }
 
     async function loadAnswers() {
@@ -508,7 +574,8 @@
       list.className = "tree";
       answers.forEach((answer, position) => {
         const answerIndex = Number.isInteger(answer.answer_index) ? answer.answer_index : position;
-        const item = makeDisclosure("Answer " + (position + 1), answer.explanation_count + " explanations");
+        const count = Number.isInteger(answer.explanation_count) ? answer.explanation_count : 0;
+        const item = makeDisclosure("Answer " + (position + 1) + " (" + count + " explanations)", "");
         renderBindings(item.children, answer.bindings);
         const explanationHost = document.createElement("div");
         item.children.appendChild(explanationHost);
@@ -549,30 +616,27 @@
       list.className = "tree";
       explanations.forEach((explanation, position) => {
         const explanationIndex = Number.isInteger(explanation.explanation_index) ? explanation.explanation_index : position;
-        const item = makeDisclosure("Explanation " + (position + 1), "Open parts");
-        renderPartTabs(answerIndex, explanationIndex, item.children);
+        const item = makeDisclosure("Explanation " + (position + 1), "");
+        renderPartList(answerIndex, explanationIndex, item.children);
         list.appendChild(item.li);
       });
       target.appendChild(list);
     }
 
-    function renderPartTabs(answerIndex, explanationIndex, target) {
-      const tabs = document.createElement("div");
-      tabs.className = "tabs";
-      const output = document.createElement("div");
-      output.className = "part-output";
-
+    function renderPartList(answerIndex, explanationIndex, target) {
+      const list = document.createElement("ul");
+      list.className = "tree";
       partTools.forEach(([part, tool, label]) => {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.textContent = label;
-        button.addEventListener("click", () => loadPart(tool, part, answerIndex, explanationIndex, output));
-        tabs.appendChild(button);
+        const item = makeDisclosure(label, "");
+        item.button.addEventListener("click", () => {
+          if (item.li.classList.contains("expanded") && !item.li.dataset.loaded) {
+            item.li.dataset.loaded = "true";
+            loadPart(tool, part, answerIndex, explanationIndex, item.children);
+          }
+        });
+        list.appendChild(item.li);
       });
-
-      target.appendChild(tabs);
-      target.appendChild(output);
-      loadPart("blawx_get_attributes_part", "attributes", answerIndex, explanationIndex, output);
+      target.appendChild(list);
     }
 
     async function loadPart(toolName, partName, answerIndex, explanationIndex, target) {
@@ -584,10 +648,10 @@
         })));
         clear(target);
         const data = response && Object.prototype.hasOwnProperty.call(response, "data") ? response.data : response;
-        if (Array.isArray(data)) {
-          appendPre(target, data.join("\n"));
+        if (partName === "explanation") {
+          renderExplanationTree(target, data);
         } else {
-          appendPre(target, data);
+          renderSimpleList(target, data);
         }
       } catch (err) {
         clear(target);
@@ -628,11 +692,6 @@
       const params = message.params || {};
       if (method.endsWith("tool-input")) receiveToolInput(params.arguments || params);
       if (method.endsWith("tool-result")) receiveToolResult(params.structuredContent || params.structured_content || params);
-    });
-
-    el.refresh.addEventListener("click", () => {
-      state.answersLoaded = true;
-      loadAnswers();
     });
 
     if (window.openai) {
