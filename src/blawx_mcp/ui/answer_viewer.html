@@ -172,16 +172,19 @@
 
     .bindings,
     .simple-list {
+      list-style: disc;
       margin: 8px 0 12px;
-      padding-left: 20px;
+      padding-left: 24px;
     }
 
     .bindings li,
     .simple-list li {
+      display: list-item;
       margin: 4px 0;
     }
 
     .binding-name {
+      display: inline;
       font-weight: 700;
     }
 
@@ -442,6 +445,9 @@
     }
 
     function parseExplanationTree(data) {
+      if (data && typeof data === "object" && !Array.isArray(data) && Array.isArray(data.reasons) && !data.conclusion) {
+        return data.reasons.map((item) => normalizeExplanationNode(item));
+      }
       if (Array.isArray(data)) {
         return data.map((item) => normalizeExplanationNode(item));
       }
@@ -471,7 +477,7 @@
         return { label: text(item), children: [] };
       }
 
-      const label = item.text || item.label || item.summary || item.content || item.html || item.name || item.title || item.statement || item;
+      const label = item.conclusion || item.text || item.label || item.summary || item.content || item.html || item.name || item.title || item.statement || item;
       const rawChildren = item.children || item.items || item.nodes || item.reasons || [];
       return {
         label,

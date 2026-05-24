@@ -302,7 +302,10 @@ def test_ask_tools_serialize_answer_viewer_ui_metadata_in_tools_list():
 def test_ask_tool_result_exposes_ui_meta_and_structured_content_only(monkeypatch):
     from blawx_mcp import server
 
+    captured = {}
+
     async def fake_project_request_body(**kwargs):
+        captured.update(kwargs)
         return {
             "status_code": 200,
             "ok": True,
@@ -327,6 +330,35 @@ def test_ask_tool_result_exposes_ui_meta_and_structured_content_only(monkeypatch
     assert converted.meta == {"ui": {"resourceUri": "ui://blawx/answers", "visibility": ["model", "app"]}}
     assert converted.structuredContent["cache_key"] == "cache-123"
     assert converted.content == []
+    assert captured["params"] == {"output_styles": ["human", "nice"], "cached": True}
+
+
+def test_ask_tool_accepts_custom_output_styles(monkeypatch):
+    from blawx_mcp import server
+
+    captured = {}
+
+    async def fake_project_request_body(**kwargs):
+        captured.update(kwargs)
+        return {"status_code": 200, "ok": True, "body": {"cache_key": "cache-123"}}
+
+    monkeypatch.setattr(server, "_project_request_body", fake_project_request_body)
+
+    async def run():
+        return await server.mcp.call_tool(
+            "blawx_question_ask_with_fact_scenario",
+            {
+                "team_slug": "team",
+                "project_id": 1,
+                "question_id": 2,
+                "fact_scenario_id": 3,
+                "output_styles": ["nice"],
+            },
+        )
+
+    asyncio.run(run())
+
+    assert captured["params"] == {"output_styles": ["nice"], "cached": True}
 
 
 def test_answer_viewer_resource_registered():
@@ -336,6 +368,32 @@ def test_answer_viewer_resource_registered():
 
     assert resource.name == "blawx-answer-viewer"
     assert resource.mime_type == "text/html;profile=mcp-app"
+
+
+def test_explanation_part_uses_structured_nice_tree(monkeypatch):
+    from blawx_mcp import server
+
+    captured = {}
+    nice_tree = {"reasons": [{"conclusion": "A", "reasons": [{"conclusion": "B", "reasons": []}]}]}
+
+    async def fake_project_request_body(**kwargs):
+        captured.update(kwargs)
+        return {
+            "status_code": 200,
+            "ok": True,
+            "body": {"part": "NiceTree", "type": "json", "start": None, "end": None, "total": 1, "data": nice_tree},
+        }
+
+    monkeypatch.setattr(server, "_project_request_body", fake_project_request_body)
+
+    async def run():
+        return await server.blawx_get_explanation_part("team", 1, 2, "cache", 0, 0)
+
+    result = asyncio.run(run())
+
+    assert "/explanations/0/NiceTree/" in captured["reasoner_path"]
+    assert result["part"] == "explanation"
+    assert result["data"] == nice_tree
 
 
 def test_answer_viewer_resource_returns_html():
@@ -351,6 +409,7 @@ def test_answer_viewer_resource_returns_html():
     assert "<title>Review Blawx Responses</title>" in contents[0].content
     assert "receiveToolResult" in contents[0].content
     assert 'result.type === "json"' in contents[0].content
+    assert "item.conclusion" in contents[0].content
     assert "loadExplanations" in contents[0].content
     assert "loadPart" in contents[0].content
 

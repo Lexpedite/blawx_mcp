@@ -42,6 +42,7 @@ _ANSWER_VIEWER_MIME_TYPE = "text/html;profile=mcp-app"
 _ANSWER_VIEWER_META = {"ui": {"resourceUri": _ANSWER_VIEWER_RESOURCE_URI, "visibility": ["model", "app"]}}
 _ANSWER_VIEWER_TITLE = "Blawx Answer Viewer"
 _ANSWER_VIEWER_DESCRIPTION = "Explore Blawx cached question answers and explanations."
+_DEFAULT_ASK_OUTPUT_STYLES = ["human", "nice"]
 
 
 def _env_int(name: str, default: int) -> int:
@@ -261,6 +262,11 @@ def _answer_viewer_tool_result(result: dict[str, Any]) -> CallToolResult:
     )
 
 
+def _ask_params(output_styles: list[str] | None = None) -> dict[str, Any]:
+    styles = [style.strip() for style in (output_styles or _DEFAULT_ASK_OUTPUT_STYLES) if style.strip()]
+    return {"output_styles": styles or _DEFAULT_ASK_OUTPUT_STYLES, "cached": True}
+
+
 def _unexpected_response_result(
     resp: dict[str, Any],
     *,
@@ -324,6 +330,7 @@ _PART_INTERNAL_TO_PUBLIC: dict[str, str] = {
     "HumanModel": "model",
     "HumanAttributes": "attributes",
     "HumanTree": "explanation",
+    "NiceTree": "explanation",
     "constraint_satisfaction": "constraint_satisfaction",
 }
 
@@ -1109,10 +1116,19 @@ async def blawx_question_delete(team_slug: str, project_id: int, question_id: in
 
 
 @mcp.tool(meta=_ANSWER_VIEWER_META)
-async def blawx_question_ask_with_fact_scenario(team_slug: str, project_id: int, question_id: int, fact_scenario_id: int) -> dict[str, Any]:
+async def blawx_question_ask_with_fact_scenario(
+    team_slug: str,
+    project_id: int,
+    question_id: int,
+    fact_scenario_id: int,
+    output_styles: list[str] | None = None,
+) -> dict[str, Any]:
     """Ask a question using a stored fact scenario.
 
         Returns a cache key for later retrieval.
+        `output_styles` defaults to `["human", "nice"]` so follow-up explanation
+        tools can retrieve both human list parts and the structured NiceTree
+        explanation tree.
 
         If the Blawx server returns an unexpected response shape instead of a cached-response
         payload, this tool returns the raw server response in `body` together with an `error`
@@ -1132,7 +1148,7 @@ async def blawx_question_ask_with_fact_scenario(team_slug: str, project_id: int,
         project_id=project_id,
         team_slug=team_slug,
         reasoner_path=f"questions/{question_id}/ask/qfa/",
-        params={"output_styles": ["human"], "cached": True},
+        params=_ask_params(output_styles),
         json_body=payload,
         timeout_seconds=120.0,
     )
@@ -1166,10 +1182,19 @@ async def blawx_question_ask_with_fact_scenario(team_slug: str, project_id: int,
 
 
 @mcp.tool(meta=_ANSWER_VIEWER_META)
-async def blawx_question_ask_with_facts(team_slug: str, project_id: int, question_id: int, facts: AskFactsPayload) -> dict[str, Any]:
+async def blawx_question_ask_with_facts(
+    team_slug: str,
+    project_id: int,
+    question_id: int,
+    facts: AskFactsPayload,
+    output_styles: list[str] | None = None,
+) -> dict[str, Any]:
     """Ask a question using a structured facts payload.
 
         Returns a cache key for later retrieval.
+        `output_styles` defaults to `["human", "nice"]` so follow-up explanation
+        tools can retrieve both human list parts and the structured NiceTree
+        explanation tree.
 
         If the Blawx server returns an unexpected response shape instead of a cached-response
         payload, this tool returns the raw server response in `body` together with an `error`
@@ -1243,7 +1268,7 @@ async def blawx_question_ask_with_facts(team_slug: str, project_id: int, questio
         project_id=project_id,
         team_slug=team_slug,
         reasoner_path=f"questions/{question_id}/ask/",
-        params={"output_styles": ["human"], "cached": True},
+        params=_ask_params(output_styles),
         json_body=payload,
         timeout_seconds=120.0,
     )
@@ -1395,7 +1420,7 @@ async def blawx_list_explanations(team_slug: str, project_id: int, question_id: 
             parts_available: list[str] = []
             if isinstance(parts_obj, dict):
                 for internal_name, public_name in _PART_INTERNAL_TO_PUBLIC.items():
-                    if internal_name in parts_obj:
+                    if internal_name in parts_obj and public_name not in parts_available:
                         parts_available.append(public_name)
 
             out_explanations.append(
@@ -1951,6 +1976,8 @@ async def blawx_get_explanation_part(
 
     Uses optional 1-based inclusive line slicing via start/end.
     Returns an object with fields: part, type, start, end, total, data.
+    `data` is the structured NiceTree explanation with natural-language
+    `conclusion` fields and nested `reasons`.
 
     If the Blawx server returns an unexpected response shape, the raw server response is
     preserved in `body` and mirrored in `data` for compatibility.
@@ -1970,7 +1997,7 @@ async def blawx_get_explanation_part(
         cache_key=cache_key,
         answer_index=answer_index,
         explanation_index=explanation_index,
-        part_name="HumanTree",
+        part_name="NiceTree",
         start=start,
         end=end,
     )
