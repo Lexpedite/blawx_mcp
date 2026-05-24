@@ -350,6 +350,7 @@ def test_answer_viewer_resource_returns_html():
     assert contents[0].mime_type == "text/html;profile=mcp-app"
     assert "<title>Blawx Answers</title>" in contents[0].content
     assert "receiveToolResult" in contents[0].content
+    assert 'result.type === "json"' in contents[0].content
     assert "loadExplanations" in contents[0].content
     assert "loadPart" in contents[0].content
 
