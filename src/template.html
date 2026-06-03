@@ -1,0 +1,218 @@
+{% extends "web/app/app_base.html" %}
+{% load static %}
+{% block page_head %}
+<style>
+    .collapse-toggle-arrow {
+        display: inline-block;
+        transition: transform 0.3s ease;
+        transform: rotate(90deg);
+        cursor: pointer;
+        color: #374151; /* gray-700 */
+    }
+
+    .collapse-toggle-arrow.collapsed {
+        transform: rotate(0deg);
+    }
+
+    .collapsible-content {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease;
+    }
+
+    .collapsible-content.expanded {
+        max-height: none; /* Allow unlimited height */
+        overflow: visible;
+    }
+</style>
+{% endblock %}
+{% block app %}
+<nav aria-label="breadcrumbs">
+    <ul class="pg-breadcrumbs">
+        {% include "projects/_proj_breadcrumb.html" %}
+        <li class="pg-breadcrumb"><a href="{% url "projects:questions:question_list" request.team.slug project.pk %}">Questions</a></li>
+        <li><a href="{% url "projects:questions:question_detail" request.team.slug project.pk question.pk%}">{{ question.name }}</a></li>
+        <li>Run<li>
+    </ul>
+</nav>
+<section class="app-card">
+  <h3 class="pg-subtitle">Run {{ question.name }}</h3>
+  <form id="fact-scenario-form" method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit" class="pg-button-secondary"><i class="fa fa-clipboard-question"></i> Submit</button>
+    </form>
+    <div id="results">
+    </div>
+</section>
+<script>
+    function groupByBindings(data) {
+        if (!data || !Array.isArray(data.answers)) {
+            throw new Error("Invalid input: Expected an object with an 'answers' property containing a list of dictionaries.");
+        }
+    
+        // Helper function to create a unique key from the bindings object
+        function generateKey(bindings) {
+            return JSON.stringify(Object.entries(bindings).sort());
+        }
+    
+        const groups = {};
+    
+        // Group objects by their unique bindings
+        data.answers.forEach(item => {
+            const bindingsKey = generateKey(item.Bindings || {});
+            if (!groups[bindingsKey]) {
+                groups[bindingsKey] = {
+                    bindings: item.Bindings || {},
+                    explanations: []
+                };
+            }
+            groups[bindingsKey].explanations.push(item);
+        });
+    
+        // Convert the grouped object into a list of new objects
+        return Object.values(groups);
+    }
+
+document.getElementById('fact-scenario-form').addEventListener('submit', function(event) {
+    event.preventDefault();  // Prevent the form from submitting the traditional way
+    var formData = new FormData(this);
+    var factScenarioId = formData.get('facts');
+    var jsonData = { facts: factScenarioId };
+    var block = document.getElementById('results')
+    block.innerHTML = "Thinking...";
+    fetch('{% url "projects:questions:reasoner:ask_qfs" request.team.slug project.pk question.pk %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': formData.get('csrfmiddlewaretoken'),
+        },
+        body: JSON.stringify(jsonData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        // Display the results in the results div
+        const codeContent = JSON.stringify(data);
+            
+        // Parse the JSON content
+        let jsonData;
+        try {
+            jsonData = JSON.parse(codeContent);
+        } catch (e) {
+            console.error("Invalid JSON content", e);
+            return;
+        }
+
+        var block = document.getElementById('results')
+        block.innerHTML = "";
+        var heading = document.createElement('h2');
+        heading.textContent = 'Answers';
+        block.appendChild(heading);
+        answers = generate_answers(groupByBindings(jsonData))
+        var tempDiv = document.createElement('div');
+        tempDiv.innerHTML = answers;
+        block.appendChild(tempDiv)
+    })
+    .catch(error => console.error('Error:', error));
+});
+
+function generate_explanation_tree(prefix, conclusion) {
+    // Determine if it has sub-reasons:
+    has_reasons = 'reasons' in conclusion && conclusion['reasons'].length > 0
+    conclusion_text = conclusion['conclusion']
+    output = '<li class="pl-2">'
+    if (has_reasons) {
+        output += '<i class="fas fa-chevron-right collapse-toggle-arrow collapsed -ml-3 cursor-pointer" onclick="toggleCollapse(\'' + prefix + '\')"></i>'
+        output += '<span class="ml-1">' + conclusion_text + ', because</span>'
+        output += '<ul id="' + prefix + '" class="collapsible-content list-none pl-4 border-l">'
+        // Do reasons
+        for (var i=0; i< conclusion['reasons'].length; i++) {
+            output += generate_explanation_tree(prefix + '_' + i, conclusion['reasons'][i])
+        }
+        output += '</ul>'
+    } else {
+        output += conclusion_text
+    }
+    output += "</li>"
+    return output
+}
+
+function generate_answers(data) {
+    console.log(JSON.stringify(data))
+    if (data.length == 0) {
+        // There were no answers produced.
+        output = "No answers."
+        return output
+    }
+    output = '<ul class="list-none">'
+    for (var i=0; i < data.length; i++) {
+        output += '<li class="pl-2">'
+        output += '<i class="fas fa-chevron-right collapse-toggle-arrow collapsed -ml-3 cursor-pointer" onclick="toggleCollapse(\'answer' + (i+1) + '\')"></i>'
+        output += '<span class="ml-1 font-bold"> Answer ' + (i+1) + ':</span>'
+        output += '<ul id="answer' + (i+1) + '" class="collapsible-content list-none pl-4 border-l">'
+        //Bindings
+        output += '<table>'
+        for (let binding in data[i]['bindings']) {
+            output += '<tr><td class="text-right font-bold pr-4">' + binding + '</td>'
+            output += '<td class="pl-2">' + data[i]['bindings'][binding] + '</td></tr>'
+        }
+        output += '</table>'
+        // Explanations
+        for (var j=0; j < data[i]['explanations'].length; j++) {
+            if (data[i]['explanations'][j]['Attributes'].length > 0 ||
+                data[i]['explanations'][j]['HumanTree'] != "* query,") {
+                output += '<li class="pl-2">'
+                output += '<i class="fas fa-chevron-right collapse-toggle-arrow collapsed -ml-3 cursor-pointer" onclick="toggleCollapse(\'a' + (i+1) + 'e' + (j+1) + '\')"></i>'
+                output += '<span class="ml-1 font-bold"> Explanation ' + (j+1) + '</span>'
+                output += '<ul id="a' + (i+1) + 'e' + (j+1) + '" class="collapsible-content list-none pl-4 border-l">'
+                //Constraints
+                useful_attr = false;
+                for (k=0; k < data[i]['explanations'][j]['NiceAttributes'].length; k++) {
+                    if (!data[i]['explanations'][j]['NiceAttributes'][k].startsWith("put_attr")) {
+                        useful_attr = true;
+                        break;
+                    }
+                }
+                if (data[i]['explanations'][j]['Attributes'].length && useful_attr) {
+                    output += '<li class="pl-2">'
+                    output += '<i class="fas fa-chevron-right collapse-toggle-arrow collapsed -ml-3 cursor-pointer" onclick="toggleCollapse(\'a' + (i+1) + 'e' + (j+1) + 'c\')"></i>'
+                    output += '<span class="ml-1"> Given the constraints...</span>'
+                    output += '<ul id="a' + (i+1) + 'e' + (j+1) + 'c" class="collapsible-content list-none pl-4 border-l">'
+                    for (var k=0; k < data[i]['explanations'][j]['Attributes'].length; k++) {
+                        if (data[i]['explanations'][j]['Attributes'][k]['functor'] != 'put_attr') {
+                            output += '<li class="pl-2">' + data[i]['explanations'][j]['HumanAttributes'][k] + '</li>'
+                        }
+                    }
+                    output += '</ul>'
+                    output += '</li>'
+                }
+                //Tree
+                for (var l=0; l < data[i]['explanations'][j]['NiceTree']['reasons'].length; l++) {
+                    output += generate_explanation_tree('a' + (i+1) + 'e' + (j+1) + 't' + (l+1), data[i]['explanations'][j]['NiceTree']['reasons'][l])
+                }
+                output += '</ul></li>'
+            }
+        }
+        output += '</ul></li>'
+    }
+    output += "</ul>"
+    return output
+}
+
+function toggleCollapse(targetId) {
+    const target = document.getElementById(targetId);
+    const arrow = document.querySelector(`[onclick="toggleCollapse('${targetId}')"]`);
+    
+    if (target && arrow) {
+        if (target.classList.contains('expanded')) {
+            target.classList.remove('expanded');
+            arrow.classList.add('collapsed');
+        } else {
+            target.classList.add('expanded');
+            arrow.classList.remove('collapsed');
+        }
+    }
+}
+</script>
+
+{% endblock %}

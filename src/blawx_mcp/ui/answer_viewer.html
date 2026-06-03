@@ -1,0 +1,932 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Open every link in a separate browser window/tab, not the embedded chat frame. -->
+  <base target="_blank">
+  <title>Review Blawx Responses</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f8fafc;
+      --panel: #ffffff;
+      --text: #172033;
+      --muted: #5d6679;
+      --line: #d8dde8;
+      --accent: #246b5a;
+      --accent-weak: #e6f2ef;
+      --danger: #a53131;
+      --danger-weak: #f8e7e7;
+      --code: #111827;
+      --code-bg: #eef2f7;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111827;
+        --panel: #182235;
+        --text: #edf2f7;
+        --muted: #a8b3c7;
+        --line: #324056;
+        --accent: #72c7b4;
+        --accent-weak: #193d38;
+        --danger: #ff9b9b;
+        --danger-weak: #4b2020;
+        --code: #f8fafc;
+        --code-bg: #0f172a;
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    button {
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--panel);
+      color: var(--text);
+      cursor: pointer;
+      font: inherit;
+      padding: 6px 10px;
+    }
+
+    button:hover {
+      border-color: var(--accent);
+    }
+
+    button.link {
+      min-height: 0;
+      border: 0;
+      background: transparent;
+      color: var(--accent);
+      padding: 0;
+      text-align: left;
+    }
+
+    pre {
+      margin: 8px 0 0;
+      padding: 10px;
+      overflow: auto;
+      border-radius: 6px;
+      background: var(--code-bg);
+      color: var(--code);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .app {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 18px;
+    }
+
+    .header {
+      margin-bottom: 14px;
+    }
+
+    .title {
+      margin: 0;
+      font-size: 20px;
+      line-height: 1.2;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 14px;
+      margin: 12px 0;
+    }
+
+    .error {
+      background: var(--danger-weak);
+      border-color: var(--danger);
+    }
+
+    .tree {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .node {
+      border-top: 1px solid var(--line);
+      padding: 3px 0;
+    }
+
+    .node:first-child {
+      border-top: 0;
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .chevron {
+      width: 14px;
+      height: 14px;
+      flex: 0 0 14px;
+      min-height: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .caret {
+      display: block;
+      transition: transform 0.18s ease;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .caret {
+        transition: none;
+      }
+    }
+
+    button.chevron:hover {
+      border: 0;
+      color: var(--accent);
+    }
+
+    .row-title {
+      min-width: 0;
+      font-weight: 700;
+    }
+
+    /* Explanation conclusions/reasons carry .inline-html; keep them unbolded
+       so only the structural headings (Answer, Explanation, part names) are bold. */
+    .row-title.inline-html {
+      font-weight: 400;
+    }
+
+    .summary {
+      color: var(--muted);
+      overflow-wrap: anywhere;
+    }
+
+    .children {
+      display: none;
+      margin-left: 11px;
+      padding: 3px 0 0 4px;
+      border-left: 2px solid var(--line);
+    }
+
+    .expanded > .children {
+      display: block;
+    }
+
+    .expanded > .row .caret {
+      transform: rotate(90deg);
+    }
+
+    .bindings,
+    .simple-list {
+      list-style: disc;
+      margin: 8px 0 12px;
+      padding-left: 24px;
+    }
+
+    .bindings li,
+    .simple-list li {
+      display: list-item;
+      margin: 4px 0;
+    }
+
+    .binding-name {
+      display: inline;
+      font-weight: 700;
+    }
+
+    .inline-html a {
+      color: var(--accent);
+      text-decoration: underline;
+    }
+
+    .empty {
+      color: var(--muted);
+      padding: 8px 0;
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <div class="header">
+      <h1 class="title">Review Blawx Responses</h1>
+    </div>
+    <section id="status" class="panel"></section>
+    <section id="answers" class="panel"></section>
+  </main>
+
+  <script>
+    const state = {
+      toolInput: null,
+      toolResult: null,
+      answersLoaded: false,
+      pendingCalls: new Map(),
+      nextId: 1,
+      // Human-readable content the user has opened, keyed by heading. Mirrored
+      // to the model silently via shareWithModel() so the chat knows what the
+      // user has seen.
+      shared: new Map()
+    };
+
+    const partTools = [
+      ["attributes", "blawx_get_attributes_part", "Attributes"],
+      ["explanation", "blawx_get_explanation_part", "Explanation"],
+      ["model", "blawx_get_model_part", "Model"],
+      ["constraint_satisfaction", "blawx_get_constraint_satisfaction_part", "Constraint Satisfaction"]
+    ];
+
+    const el = {
+      status: document.getElementById("status"),
+      answers: document.getElementById("answers")
+    };
+
+    function text(value) {
+      if (value === null || value === undefined || value === "") return "Not provided";
+      if (typeof value === "string") return value;
+      return JSON.stringify(value, null, 2);
+    }
+
+    function clear(node) {
+      while (node.firstChild) node.removeChild(node.firstChild);
+    }
+
+    function appendText(parent, tag, value, className) {
+      const node = document.createElement(tag);
+      node.textContent = value;
+      if (className) node.className = className;
+      parent.appendChild(node);
+      return node;
+    }
+
+    function appendPre(parent, value) {
+      const pre = document.createElement("pre");
+      pre.textContent = text(value);
+      parent.appendChild(pre);
+      return pre;
+    }
+
+    function showMessage(target, message, className) {
+      clear(target);
+      const p = document.createElement("div");
+      p.className = className || "empty";
+      p.textContent = message;
+      target.appendChild(p);
+    }
+
+    function renderStatus() {
+      clear(el.status);
+      el.status.hidden = false;
+      const result = state.toolResult || {};
+      const ok = Boolean(result.ok && result.cache_key);
+
+      if (!state.toolResult) {
+        showMessage(el.status, "The MCP host has not delivered the ask result yet.");
+        return;
+      }
+
+      if (!ok) {
+        el.status.classList.add("error");
+        appendText(el.status, "strong", "The question did not produce a cached response.");
+        appendPre(el.status, result.error || result.body || result);
+        return;
+      }
+
+      el.status.classList.remove("error");
+      el.status.hidden = true;
+    }
+
+    function baseArgs(extra) {
+      const input = state.toolInput || {};
+      const result = state.toolResult || {};
+      return Object.assign({
+        team_slug: input.team_slug,
+        project_id: input.project_id,
+        question_id: input.question_id,
+        cache_key: result.cache_key
+      }, extra || {});
+    }
+
+    async function callTool(name, args) {
+      if (window.openai && typeof window.openai.callTool === "function") {
+        return window.openai.callTool(name, args);
+      }
+
+      if (window.blawxHostApp && typeof window.blawxHostApp.callServerTool === "function") {
+        return window.blawxHostApp.callServerTool({ name, arguments: args });
+      }
+
+      const id = state.nextId++;
+      const message = { jsonrpc: "2.0", id, method: "tools/call", params: { name, arguments: args } };
+      const promise = new Promise((resolve, reject) => {
+        state.pendingCalls.set(id, { resolve, reject });
+        window.setTimeout(() => {
+          if (state.pendingCalls.has(id)) {
+            state.pendingCalls.delete(id);
+            reject(new Error("Timed out waiting for the MCP host to answer tools/call."));
+          }
+        }, 60000);
+      });
+      window.parent.postMessage(message, "*");
+      return promise;
+    }
+
+    function unwrapToolResult(result) {
+      if (!result) return result;
+      if (result.type === "json" && Object.prototype.hasOwnProperty.call(result, "value")) {
+        return unwrapToolResult(result.value);
+      }
+      if (result.structuredContent) return result.structuredContent;
+      if (result.structured_content) return result.structured_content;
+      if (result.content && result.content.length === 1 && result.content[0].text) {
+        try {
+          return JSON.parse(result.content[0].text);
+        } catch (_err) {
+          return { body: result.content[0].text };
+        }
+      }
+      return result;
+    }
+
+    function makeDisclosure(title, summary) {
+      const li = document.createElement("li");
+      li.className = "node";
+
+      const row = document.createElement("div");
+      row.className = "row";
+      const button = document.createElement("button");
+      button.className = "chevron";
+      button.type = "button";
+      button.setAttribute("aria-label", "Expand");
+      button.innerHTML =
+        '<svg class="caret" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">' +
+        '<path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="2" ' +
+        'stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      const label = document.createElement("div");
+      label.className = "row-title";
+      label.textContent = title;
+      row.appendChild(button);
+      row.appendChild(label);
+      if (summary) appendText(row, "div", summary, "summary");
+
+      const children = document.createElement("div");
+      children.className = "children";
+      li.appendChild(row);
+      li.appendChild(children);
+
+      button.addEventListener("click", () => {
+        li.classList.toggle("expanded");
+        button.setAttribute("aria-label", li.classList.contains("expanded") ? "Collapse" : "Expand");
+      });
+
+      return { li, row, button, children };
+    }
+
+    function makeStaticTreeItem(content) {
+      const li = document.createElement("li");
+      li.className = "node";
+      const row = document.createElement("div");
+      row.className = "row";
+      const spacer = document.createElement("span");
+      spacer.className = "chevron";
+      const label = document.createElement("div");
+      label.className = "row-title inline-html";
+      appendInlineHtml(label, content);
+      row.appendChild(spacer);
+      row.appendChild(label);
+      li.appendChild(row);
+      return li;
+    }
+
+    function appendInlineHtml(parent, value) {
+      const raw = text(value);
+      const template = document.createElement("template");
+      template.innerHTML = raw;
+      sanitizeHtml(template.content);
+      if (template.content.childNodes.length) {
+        parent.appendChild(template.content.cloneNode(true));
+      } else {
+        parent.textContent = raw;
+      }
+    }
+
+    function sanitizeHtml(root) {
+      const allowedTags = new Set(["A", "STRONG", "B", "EM", "I", "CODE", "SPAN", "BR"]);
+      Array.from(root.querySelectorAll("*")).forEach((node) => {
+        if (!allowedTags.has(node.tagName)) {
+          node.replaceWith(document.createTextNode(node.textContent || ""));
+          return;
+        }
+
+        Array.from(node.attributes).forEach((attr) => {
+          const name = attr.name.toLowerCase();
+          if (node.tagName === "A" && name === "href") {
+            const href = attr.value || "";
+            if (/^(https?:|mailto:|#|\/)/i.test(href)) {
+              node.setAttribute("target", "_blank");
+              node.setAttribute("rel", "noopener noreferrer");
+              return;
+            }
+          }
+          if (node.tagName === "A" && name === "title") {
+            return; // keep the legislation tooltip text from NiceTree conclusions
+          }
+          node.removeAttribute(attr.name);
+        });
+      });
+    }
+
+    function splitLinesOutsideTags(value) {
+      // Split on newlines, but ignore any that fall inside an HTML tag. The
+      // human-readable model embeds legislation links whose title="..."
+      // attributes contain literal newlines; a naive split on /\r?\n/ would
+      // shear those <a> tags in half. Track tag/quote state so only top-level
+      // newlines (the real line separators) split the string.
+      const lines = [];
+      let current = "";
+      let inTag = false;
+      let quote = "";
+      for (let i = 0; i < value.length; i++) {
+        const ch = value[i];
+        if (inTag) {
+          if (quote) {
+            if (ch === quote) quote = "";
+          } else if (ch === '"' || ch === "'") {
+            quote = ch;
+          } else if (ch === ">") {
+            inTag = false;
+          }
+          current += ch;
+          continue;
+        }
+        if (ch === "<") {
+          inTag = true;
+          current += ch;
+          continue;
+        }
+        if (ch === "\n" || ch === "\r") {
+          if (ch === "\r" && value[i + 1] === "\n") i++;
+          lines.push(current);
+          current = "";
+          continue;
+        }
+        current += ch;
+      }
+      lines.push(current);
+      return lines.map((line) => line.trim()).filter(Boolean);
+    }
+
+    function normalizeLineItems(data) {
+      if (Array.isArray(data)) return data;
+      if (typeof data === "string") {
+        return splitLinesOutsideTags(data);
+      }
+      if (data === null || data === undefined) return [];
+      return [data];
+    }
+
+    function renderSimpleList(parent, data) {
+      const items = normalizeLineItems(data);
+      if (!items.length) {
+        appendText(parent, "div", "No data.", "empty");
+        return;
+      }
+
+      const list = document.createElement("ul");
+      list.className = "simple-list";
+      items.forEach((item) => {
+        const li = document.createElement("li");
+        // Items may contain legislation links (sanitized), so render as inline
+        // HTML; plain-text items fall back to textContent inside appendInlineHtml.
+        li.className = "inline-html";
+        appendInlineHtml(li, item);
+        list.appendChild(li);
+      });
+      parent.appendChild(list);
+    }
+
+    function parseExplanationTree(data) {
+      // The structured (NiceTree) explanation arrives as a JSON-encoded string
+      // with shape {conclusion, reasons:[...]} (leaf nodes omit `reasons`).
+      // Parse it before anything else so we render the real tree instead of
+      // splitting the JSON source on newlines like the human bullet text below.
+      if (typeof data === "string") {
+        const trimmed = data.trim();
+        if (trimmed && (trimmed[0] === "{" || trimmed[0] === "[")) {
+          try {
+            data = JSON.parse(trimmed);
+          } catch (err) {
+            // Not JSON - fall through to the human bullet-list parser below.
+          }
+        }
+      }
+
+      if (data && typeof data === "object" && !Array.isArray(data)) {
+        const reasons = Array.isArray(data.reasons) ? data.reasons : null;
+        // Drop the synthetic root ("query", or a conclusion-less wrapper) so
+        // the meaningful conclusions sit at the top level instead of hiding
+        // behind an extra disclosure.
+        if (reasons && (!data.conclusion || String(data.conclusion).trim().toLowerCase() === "query")) {
+          return reasons.map((item) => normalizeExplanationNode(item));
+        }
+        return [normalizeExplanationNode(data)];
+      }
+      if (Array.isArray(data)) {
+        return data.map((item) => normalizeExplanationNode(item));
+      }
+      if (typeof data !== "string") return [normalizeExplanationNode(data)];
+
+      const root = [];
+      const stack = [{ depth: -1, children: root }];
+      data.split(/\r?\n/).forEach((line) => {
+        if (!line.trim()) return;
+        const indent = (line.match(/^\s*/) || [""])[0].replace(/\t/g, "  ").length;
+        const depth = Math.floor(indent / 2);
+        const label = line.trim().replace(/^[-*]\s+/, "").replace(/^\d+[.)]\s+/, "");
+        const node = { label, children: [] };
+
+        while (stack.length > 1 && stack[stack.length - 1].depth >= depth) stack.pop();
+        stack[stack.length - 1].children.push(node);
+        stack.push({ depth, children: node.children });
+      });
+      return root;
+    }
+
+    function normalizeExplanationNode(item) {
+      if (typeof item === "string" || typeof item === "number" || typeof item === "boolean") {
+        return { label: item, children: [] };
+      }
+      if (!item || typeof item !== "object") {
+        return { label: text(item), children: [] };
+      }
+
+      const label = item.conclusion || item.text || item.label || item.summary || item.content || item.html || item.name || item.title || item.statement || item;
+      const rawChildren = item.children || item.items || item.nodes || item.reasons || [];
+      return {
+        label,
+        children: Array.isArray(rawChildren) ? rawChildren.map((child) => normalizeExplanationNode(child)) : []
+      };
+    }
+
+    function renderExplanationTree(parent, data) {
+      const nodes = parseExplanationTree(data);
+      if (!nodes.length) {
+        appendText(parent, "div", "No explanation data.", "empty");
+        return;
+      }
+
+      const list = document.createElement("ul");
+      list.className = "tree";
+      renderExplanationNodes(list, nodes);
+      parent.appendChild(list);
+    }
+
+    function renderExplanationNodes(parentList, nodes) {
+      nodes.forEach((node) => {
+        if (node.children && node.children.length) {
+          const item = makeDisclosure("", "");
+          const label = item.row.querySelector(".row-title");
+          label.classList.add("inline-html");
+          clear(label);
+          appendInlineHtml(label, node.label);
+          const childList = document.createElement("ul");
+          childList.className = "tree";
+          renderExplanationNodes(childList, node.children);
+          item.children.appendChild(childList);
+          parentList.appendChild(item.li);
+        } else {
+          parentList.appendChild(makeStaticTreeItem(node.label));
+        }
+      });
+    }
+
+    function parseBindingEntries(bindings) {
+      // Bindings arrive from the nice output as a newline-separated
+      // "Variable: value" string (e.g. "Game: testgame\nPlayer: jane"). Some
+      // deployments may instead send a JSON object; handle both, plus an
+      // already-parsed object, and normalise to [name, value] pairs.
+      let parsed = bindings;
+      if (typeof bindings === "string") {
+        const trimmed = bindings.trim();
+        if (trimmed && (trimmed[0] === "{" || trimmed[0] === "[")) {
+          try {
+            parsed = JSON.parse(trimmed);
+          } catch (_err) {
+            parsed = bindings;
+          }
+        }
+      }
+
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return Object.entries(parsed).map(([name, value]) => [name, text(value)]);
+      }
+
+      if (typeof parsed === "string") {
+        return parsed
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .map((line) => {
+            const idx = line.indexOf(":");
+            if (idx === -1) return ["", line];
+            return [line.slice(0, idx).trim(), line.slice(idx + 1).trim()];
+          });
+      }
+
+      return [];
+    }
+
+    function renderBindings(parent, bindings) {
+      const entries = bindings ? parseBindingEntries(bindings) : [];
+      if (!entries.length) {
+        appendText(parent, "div", "No bindings.", "empty");
+        return;
+      }
+
+      const list = document.createElement("ul");
+      list.className = "bindings";
+      entries.forEach(([name, value]) => {
+        const item = document.createElement("li");
+        if (name) {
+          const label = appendText(item, "span", name + ": ", "binding-name");
+          label.setAttribute("aria-label", name);
+        }
+        item.appendChild(document.createTextNode(value));
+        list.appendChild(item);
+      });
+      parent.appendChild(list);
+    }
+
+    function htmlToText(value) {
+      // Strip tags and decode entities to the plain visible text (link text is
+      // kept, href/title attributes are dropped), then collapse whitespace.
+      const tpl = document.createElement("template");
+      tpl.innerHTML = String(value == null ? "" : value);
+      return (tpl.content.textContent || "").replace(/\s+/g, " ").trim();
+    }
+
+    function explanationTreeToText(nodes, depth) {
+      return nodes
+        .map((node) => {
+          const indent = "  ".repeat(depth);
+          let line = indent + "- " + htmlToText(text(node.label));
+          if (node.children && node.children.length) {
+            line += "\n" + explanationTreeToText(node.children, depth + 1);
+          }
+          return line;
+        })
+        .join("\n");
+    }
+
+    function recordShared(heading, body) {
+      const value = (body || "").trim();
+      if (!value) return;
+      if (state.shared.get(heading) === value) return;
+      state.shared.set(heading, value);
+      shareWithModel();
+    }
+
+    function shareWithModel() {
+      const input = state.toolInput || {};
+      const result = state.toolResult || {};
+      const entries = Array.from(state.shared, ([heading, body]) => ({ heading, body }));
+      const body = entries.map((e) => "## " + e.heading + "\n" + e.body).join("\n\n");
+      const intro =
+        "The user is exploring Blawx results in the answer viewer. The content " +
+        "below is the human-readable output they have opened. Treat it as " +
+        "authoritative results for this cached run (cache_key " +
+        (result.cache_key || "unknown") + "), which may expire; read explanation " +
+        "reasons together with the attributes for the same explanation.\n\n";
+
+      // Standard MCP Apps (SEP-1865) channel for pushing information into the
+      // model's context. Sent as a ui/update-model-context request over the
+      // host postMessage bridge; the response is best-effort and ignored.
+      const id = state.nextId++;
+      new Promise((resolve, reject) => {
+        state.pendingCalls.set(id, { resolve, reject });
+        window.setTimeout(() => {
+          if (state.pendingCalls.has(id)) {
+            state.pendingCalls.delete(id);
+            reject(new Error("timeout"));
+          }
+        }, 60000);
+      }).catch(() => {});
+      window.parent.postMessage(
+        {
+          jsonrpc: "2.0",
+          id: id,
+          method: "ui/update-model-context",
+          params: {
+            content: [{ type: "text", text: intro + body }],
+            structuredContent: {
+              question_id: input.question_id,
+              cache_key: result.cache_key,
+              entries: entries
+            }
+          }
+        },
+        "*"
+      );
+    }
+
+    async function loadAnswers() {
+      const result = state.toolResult || {};
+      if (!result.cache_key) {
+        showMessage(el.answers, "No cached answer response is available.");
+        return;
+      }
+
+      showMessage(el.answers, "Loading answer summaries...");
+      try {
+        const response = unwrapToolResult(await callTool("blawx_list_answers", baseArgs()));
+        renderAnswers(response);
+      } catch (err) {
+        clear(el.answers);
+        appendText(el.answers, "strong", "Unable to load answers.");
+        appendPre(el.answers, err.message || err);
+      }
+    }
+
+    function renderAnswers(response) {
+      clear(el.answers);
+      const answers = response && Array.isArray(response.answers) ? response.answers : [];
+      if (!answers.length) {
+        showMessage(el.answers, "No answers.");
+        return;
+      }
+
+      const list = document.createElement("ul");
+      list.className = "tree";
+      answers.forEach((answer, position) => {
+        const answerIndex = Number.isInteger(answer.answer_index) ? answer.answer_index : position;
+        const count = Number.isInteger(answer.explanation_count) ? answer.explanation_count : 0;
+        const item = makeDisclosure("Answer " + (position + 1) + " (" + count + " explanations)", "");
+        renderBindings(item.children, answer.bindings);
+        const bindingText = parseBindingEntries(answer.bindings)
+          .map(([name, value]) => "- " + (name ? name + ": " : "") + value)
+          .join("\n");
+        recordShared("Answer " + (position + 1) + " — bindings", bindingText);
+        const explanationHost = document.createElement("div");
+        item.children.appendChild(explanationHost);
+        item.button.addEventListener("click", () => {
+          if (item.li.classList.contains("expanded") && !item.li.dataset.loaded) {
+            item.li.dataset.loaded = "true";
+            loadExplanations(answerIndex, answer.bindings, explanationHost);
+          }
+        });
+        list.appendChild(item.li);
+      });
+      el.answers.appendChild(list);
+    }
+
+    async function loadExplanations(answerIndex, bindings, target) {
+      showMessage(target, "Loading explanations...");
+      try {
+        const response = unwrapToolResult(await callTool("blawx_list_explanations", baseArgs({
+          answer_index: answerIndex
+        })));
+        renderExplanations(answerIndex, bindings, target, response);
+      } catch (err) {
+        clear(target);
+        appendText(target, "strong", "Unable to load explanations.");
+        appendPre(target, err.message || err);
+      }
+    }
+
+    function renderExplanations(answerIndex, bindings, target, response) {
+      clear(target);
+      const explanations = response && Array.isArray(response.explanations) ? response.explanations : [];
+      if (!explanations.length) {
+        showMessage(target, "No explanations available.");
+        return;
+      }
+
+      const list = document.createElement("ul");
+      list.className = "tree";
+      explanations.forEach((explanation, position) => {
+        const explanationIndex = Number.isInteger(explanation.explanation_index) ? explanation.explanation_index : position;
+        const item = makeDisclosure("Explanation " + (position + 1), "");
+        renderPartList(answerIndex, explanationIndex, item.children);
+        list.appendChild(item.li);
+      });
+      target.appendChild(list);
+    }
+
+    function renderPartList(answerIndex, explanationIndex, target) {
+      const list = document.createElement("ul");
+      list.className = "tree";
+      partTools.forEach(([part, tool, label]) => {
+        const item = makeDisclosure(label, "");
+        item.button.addEventListener("click", () => {
+          if (item.li.classList.contains("expanded") && !item.li.dataset.loaded) {
+            item.li.dataset.loaded = "true";
+            loadPart(tool, part, answerIndex, explanationIndex, item.children);
+          }
+        });
+        list.appendChild(item.li);
+      });
+      target.appendChild(list);
+    }
+
+    async function loadPart(toolName, partName, answerIndex, explanationIndex, target) {
+      showMessage(target, "Loading " + partName.replace("_", " ") + "...");
+      try {
+        const response = unwrapToolResult(await callTool(toolName, baseArgs({
+          answer_index: answerIndex,
+          explanation_index: explanationIndex
+        })));
+        clear(target);
+        const data = response && Object.prototype.hasOwnProperty.call(response, "data") ? response.data : response;
+        const heading =
+          "Answer " + (answerIndex + 1) + ", explanation " + (explanationIndex + 1) +
+          " — " + partName.replace(/_/g, " ");
+        if (partName === "explanation") {
+          renderExplanationTree(target, data);
+          recordShared(heading, explanationTreeToText(parseExplanationTree(data), 0));
+        } else {
+          renderSimpleList(target, data);
+          const body = normalizeLineItems(data)
+            .map((item) => "- " + htmlToText(text(item)))
+            .filter((line) => line !== "- ")
+            .join("\n");
+          recordShared(heading, body);
+        }
+      } catch (err) {
+        clear(target);
+        appendText(target, "strong", "Unable to load " + partName.replace("_", " ") + ".");
+        appendPre(target, err.message || err);
+      }
+    }
+
+    function receiveToolInput(input) {
+      state.toolInput = input || state.toolInput;
+      maybeRender();
+    }
+
+    function receiveToolResult(result) {
+      state.toolResult = unwrapToolResult(result);
+      maybeRender();
+    }
+
+    function maybeRender() {
+      renderStatus();
+      if (state.toolInput && state.toolResult && state.toolResult.cache_key && !state.answersLoaded) {
+        state.answersLoaded = true;
+        loadAnswers();
+      }
+    }
+
+    window.addEventListener("message", (event) => {
+      const message = event.data || {};
+      if (message.id && state.pendingCalls.has(message.id)) {
+        const pending = state.pendingCalls.get(message.id);
+        state.pendingCalls.delete(message.id);
+        if (message.error) pending.reject(message.error);
+        else pending.resolve(message.result);
+        return;
+      }
+
+      const method = String(message.method || "");
+      const params = message.params || {};
+      if (method.endsWith("tool-input")) receiveToolInput(params.arguments || params);
+      if (method.endsWith("tool-result")) receiveToolResult(params.structuredContent || params.structured_content || params);
+    });
+
+    if (window.openai) {
+      receiveToolInput(window.openai.toolInput);
+      receiveToolResult(window.openai.toolOutput);
+      window.addEventListener("openai:set_globals", () => {
+        receiveToolInput(window.openai.toolInput);
+        receiveToolResult(window.openai.toolOutput);
+      });
+    }
+
+    window.parent.postMessage({ jsonrpc: "2.0", method: "ui/initialize", params: {} }, "*");
+    window.parent.postMessage({ jsonrpc: "2.0", method: "ui/notifications/initialized", params: {} }, "*");
+    maybeRender();
+  </script>
+</body>
+</html>

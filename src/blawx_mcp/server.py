@@ -4,11 +4,14 @@ import argparse
 import asyncio
 import logging
 import os
+import re
 import sys
+from importlib import resources
 from typing import Any
 from urllib.parse import urljoin
 
 import httpx
+from mcp.types import CallToolResult
 from mcp.server.fastmcp import FastMCP
 
 from .config import get_settings
@@ -35,6 +38,12 @@ from .schemas import (
 
 _TEAM_ID_CACHE: dict[tuple[str, str], int] = {}
 _PROJECT_ID_ERROR = "project_id must be a positive integer. Discover valid ids with blawx_projects_list."
+_ANSWER_VIEWER_RESOURCE_URI = "ui://blawx/answers"
+_ANSWER_VIEWER_MIME_TYPE = "text/html;profile=mcp-app"
+_ANSWER_VIEWER_META = {"ui": {"resourceUri": _ANSWER_VIEWER_RESOURCE_URI, "visibility": ["model", "app"]}}
+_ANSWER_VIEWER_TITLE = "Blawx Answer Viewer"
+_ANSWER_VIEWER_DESCRIPTION = "Explore Blawx cached question answers and explanations."
+_DEFAULT_ASK_OUTPUT_STYLES = ["human", "scasp"]
 
 
 def _env_int(name: str, default: int) -> int:
@@ -62,6 +71,26 @@ mcp = FastMCP(
     port=_port,
     log_level=_log_level if _log_level else "INFO",
 )
+
+
+def _read_ui_resource(filename: str) -> str:
+    try:
+        return (resources.files("blawx_mcp") / "ui" / filename).read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return f"<!doctype html><title>Missing UI</title><p>Could not find {filename}.</p>"
+
+
+@mcp.resource(
+    _ANSWER_VIEWER_RESOURCE_URI,
+    name="blawx-answer-viewer",
+    title=_ANSWER_VIEWER_TITLE,
+    description=_ANSWER_VIEWER_DESCRIPTION,
+    mime_type=_ANSWER_VIEWER_MIME_TYPE,
+)
+async def blawx_answer_viewer_resource() -> str:
+    """Standalone MCP Apps UI for exploring cached Blawx answer responses."""
+
+    return _read_ui_resource("answer_viewer.html")
 
 
 @mcp.tool(structured_output=False)
@@ -226,6 +255,19 @@ def _extract_cache_key(body: Any) -> str:
     raise RuntimeError("Response did not include a cache_key")
 
 
+def _answer_viewer_tool_result(result: dict[str, Any]) -> CallToolResult:
+    return CallToolResult(
+        _meta=_ANSWER_VIEWER_META,
+        content=[],
+        structuredContent=result,
+    )
+
+
+def _ask_params(output_styles: list[str] | None = None) -> dict[str, Any]:
+    styles = [style.strip() for style in (output_styles or _DEFAULT_ASK_OUTPUT_STYLES) if style.strip()]
+    return {"output_styles": styles or _DEFAULT_ASK_OUTPUT_STYLES, "cached": True}
+
+
 def _unexpected_response_result(
     resp: dict[str, Any],
     *,
@@ -289,12 +331,33 @@ _PART_INTERNAL_TO_PUBLIC: dict[str, str] = {
     "HumanModel": "model",
     "HumanAttributes": "attributes",
     "HumanTree": "explanation",
+    "NiceTree": "explanation",
     "constraint_satisfaction": "constraint_satisfaction",
 }
 
 
 def _public_part_name(internal: str) -> str:
     return _PART_INTERNAL_TO_PUBLIC.get(internal, internal)
+
+
+# Matches root-relative href values (e.g. href="/a/team/...") but not
+# protocol-relative ones (href="//host/...").
+_RELATIVE_HREF_RE = re.compile(r"""(href\s*=\s*)(["'])(/(?!/)[^"']*)\2""")
+
+
+def _absolutize_links(value: str, base_url: str) -> str:
+    """Rewrite root-relative href values to absolute URLs on the Blawx server.
+
+    Explanation and model text include legislation links like
+    `<a href="/a/team/project/...">` that only resolve against the configured
+    Blawx server. Prefix them with the configured base URL so they open
+    correctly from any client.
+    """
+    base = base_url.rstrip("/")
+    return _RELATIVE_HREF_RE.sub(
+        lambda m: f"{m.group(1)}{m.group(2)}{base}{m.group(3)}{m.group(2)}",
+        value,
+    )
 
 
 def _annotate_blawx_json_error(result: dict[str, Any]) -> dict[str, Any]:
@@ -1074,10 +1137,23 @@ async def blawx_question_delete(team_slug: str, project_id: int, question_id: in
 
 
 @mcp.tool()
-async def blawx_question_ask_with_fact_scenario(team_slug: str, project_id: int, question_id: int, fact_scenario_id: int) -> dict[str, Any]:
+async def blawx_question_ask_with_fact_scenario(
+    team_slug: str,
+    project_id: int,
+    question_id: int,
+    fact_scenario_id: int,
+    output_styles: list[str] | None = None,
+) -> dict[str, Any]:
     """Ask a question using a stored fact scenario.
 
         Returns a cache key for later retrieval.
+        `output_styles` defaults to `["human", "scasp"]` so follow-up explanation
+        tools can retrieve both human list parts and the structured NiceTree
+        explanation tree.
+
+        To let the user explore the answers and explanations visually, pass the
+        returned `cache_key` to `blawx_view_answers`, which renders the
+        interactive Blawx answer viewer.
 
         If the Blawx server returns an unexpected response shape instead of a cached-response
         payload, this tool returns the raw server response in `body` together with an `error`
@@ -1097,7 +1173,7 @@ async def blawx_question_ask_with_fact_scenario(team_slug: str, project_id: int,
         project_id=project_id,
         team_slug=team_slug,
         reasoner_path=f"questions/{question_id}/ask/qfa/",
-        params={"output_styles": ["human"], "cached": True},
+        params=_ask_params(output_styles),
         json_body=payload,
         timeout_seconds=120.0,
     )
@@ -1127,10 +1203,23 @@ async def blawx_question_ask_with_fact_scenario(team_slug: str, project_id: int,
 
 
 @mcp.tool()
-async def blawx_question_ask_with_facts(team_slug: str, project_id: int, question_id: int, facts: AskFactsPayload) -> dict[str, Any]:
+async def blawx_question_ask_with_facts(
+    team_slug: str,
+    project_id: int,
+    question_id: int,
+    facts: AskFactsPayload,
+    output_styles: list[str] | None = None,
+) -> dict[str, Any]:
     """Ask a question using a structured facts payload.
 
         Returns a cache key for later retrieval.
+        `output_styles` defaults to `["human", "scasp"]` so follow-up explanation
+        tools can retrieve both human list parts and the structured NiceTree
+        explanation tree.
+
+        To let the user explore the answers and explanations visually, pass the
+        returned `cache_key` to `blawx_view_answers`, which renders the
+        interactive Blawx answer viewer.
 
         If the Blawx server returns an unexpected response shape instead of a cached-response
         payload, this tool returns the raw server response in `body` together with an `error`
@@ -1204,7 +1293,7 @@ async def blawx_question_ask_with_facts(team_slug: str, project_id: int, questio
         project_id=project_id,
         team_slug=team_slug,
         reasoner_path=f"questions/{question_id}/ask/",
-        params={"output_styles": ["human"], "cached": True},
+        params=_ask_params(output_styles),
         json_body=payload,
         timeout_seconds=120.0,
     )
@@ -1231,6 +1320,49 @@ async def blawx_question_ask_with_facts(team_slug: str, project_id: int, questio
         "created_at": _extract_optional_str(body, "created_at"),
         "answer_count": _extract_optional_int(body, "answer_count"),
     }
+
+
+@mcp.tool(meta=_ANSWER_VIEWER_META)
+async def blawx_view_answers(
+    team_slug: str,
+    project_id: int,
+    question_id: int,
+    cache_key: str,
+) -> dict[str, Any]:
+    """Render a cached question response in the interactive Blawx answer viewer.
+
+    Use this when the user wants to explore answers, bindings, and nested
+    explanations visually. Pass a `cache_key` returned by one of the ask tools
+    (`blawx_question_ask_with_fact_scenario` or `blawx_question_ask_with_facts`).
+
+    This tool carries the answer-viewer UI metadata, so a host that supports
+    MCP Apps renders the viewer for the cached response. The viewer then loads
+    answers and explanation parts on demand via the retrieval tools.
+
+    Returns cached-response metadata (cache_key, ttl, created time, answer count
+    when available). If `status_code` is 410, the cache key has expired and you
+    must re-run an ask tool to obtain a fresh one.
+    """
+
+    resp = await _project_request_body(
+        method="GET",
+        project_id=project_id,
+        team_slug=team_slug,
+        reasoner_path=f"questions/{question_id}/responses/{cache_key}/",
+        timeout_seconds=30.0,
+    )
+
+    body = resp.get("body")
+    result = {
+        "ok": resp["ok"],
+        "status_code": resp["status_code"],
+        "cache_key": cache_key,
+        "ttl_seconds": _extract_optional_int(body, "ttl_seconds"),
+        "created_at": _extract_optional_str(body, "created_at"),
+        "answer_count": _extract_optional_int(body, "answer_count"),
+        "body": body,
+    }
+    return _answer_viewer_tool_result(result)
 
 
 @mcp.tool()
@@ -1352,7 +1484,7 @@ async def blawx_list_explanations(team_slug: str, project_id: int, question_id: 
             parts_available: list[str] = []
             if isinstance(parts_obj, dict):
                 for internal_name, public_name in _PART_INTERNAL_TO_PUBLIC.items():
-                    if internal_name in parts_obj:
+                    if internal_name in parts_obj and public_name not in parts_available:
                         parts_available.append(public_name)
 
             out_explanations.append(
@@ -1797,6 +1929,9 @@ async def _get_part(
     )
     body = resp.get("body")
     if isinstance(body, dict):
+        data = body.get("data")
+        if isinstance(data, str) and "href" in data:
+            data = _absolutize_links(data, get_settings().base_url)
         # Matches CachedResponseExplanationPart.
         return {
             "ok": resp["ok"],
@@ -1806,7 +1941,7 @@ async def _get_part(
             "start": body.get("start"),
             "end": body.get("end"),
             "total": body.get("total"),
-            "data": body.get("data"),
+            "data": data,
         }
 
     # Fallback for non-JSON or unexpected responses.
@@ -1835,6 +1970,10 @@ async def blawx_get_model_part(
     end: int | None = None,
 ) -> dict[str, Any]:
     """Get the model portion of an explanation.
+
+    Uses the HumanModel part: one natural-language fact per line (e.g.
+    `testgame is a game`, `the winner of testgame was jane`). Conclusions
+    derived from legislation include an HTML link to the relevant section.
 
     Uses optional 1-based inclusive line slicing via start/end.
     Returns an object with fields: part, type, start, end, total, data.
@@ -1908,6 +2047,8 @@ async def blawx_get_explanation_part(
 
     Uses optional 1-based inclusive line slicing via start/end.
     Returns an object with fields: part, type, start, end, total, data.
+    `data` is the structured NiceTree explanation with natural-language
+    `conclusion` fields and nested `reasons`.
 
     If the Blawx server returns an unexpected response shape, the raw server response is
     preserved in `body` and mirrored in `data` for compatibility.
@@ -1927,7 +2068,7 @@ async def blawx_get_explanation_part(
         cache_key=cache_key,
         answer_index=answer_index,
         explanation_index=explanation_index,
-        part_name="HumanTree",
+        part_name="NiceTree",
         start=start,
         end=end,
     )
