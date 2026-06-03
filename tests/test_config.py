@@ -507,6 +507,14 @@ def test_answer_viewer_parses_structured_nice_tree():
     assert ".expanded > .row .caret" in html
     assert "rotate(90deg)" in html
 
+    # Content the user opens in the viewer is mirrored to the model as
+    # human-readable text via the standard MCP Apps ui/update-model-context
+    # request (not the OpenAI-proprietary setWidgetState).
+    assert "shareWithModel" in html
+    assert "ui/update-model-context" in html
+    assert "explanationTreeToText" in html
+    assert "setWidgetState" not in html
+
 
 def test_answer_viewer_packaged_as_package_data():
     pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))

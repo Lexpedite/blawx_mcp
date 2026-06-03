@@ -245,7 +245,11 @@
       toolResult: null,
       answersLoaded: false,
       pendingCalls: new Map(),
-      nextId: 1
+      nextId: 1,
+      // Human-readable content the user has opened, keyed by heading. Mirrored
+      // to the model silently via shareWithModel() so the chat knows what the
+      // user has seen.
+      shared: new Map()
     };
 
     const partTools = [
@@ -676,6 +680,78 @@
       parent.appendChild(list);
     }
 
+    function htmlToText(value) {
+      // Strip tags and decode entities to the plain visible text (link text is
+      // kept, href/title attributes are dropped), then collapse whitespace.
+      const tpl = document.createElement("template");
+      tpl.innerHTML = String(value == null ? "" : value);
+      return (tpl.content.textContent || "").replace(/\s+/g, " ").trim();
+    }
+
+    function explanationTreeToText(nodes, depth) {
+      return nodes
+        .map((node) => {
+          const indent = "  ".repeat(depth);
+          let line = indent + "- " + htmlToText(text(node.label));
+          if (node.children && node.children.length) {
+            line += "\n" + explanationTreeToText(node.children, depth + 1);
+          }
+          return line;
+        })
+        .join("\n");
+    }
+
+    function recordShared(heading, body) {
+      const value = (body || "").trim();
+      if (!value) return;
+      if (state.shared.get(heading) === value) return;
+      state.shared.set(heading, value);
+      shareWithModel();
+    }
+
+    function shareWithModel() {
+      const input = state.toolInput || {};
+      const result = state.toolResult || {};
+      const entries = Array.from(state.shared, ([heading, body]) => ({ heading, body }));
+      const body = entries.map((e) => "## " + e.heading + "\n" + e.body).join("\n\n");
+      const intro =
+        "The user is exploring Blawx results in the answer viewer. The content " +
+        "below is the human-readable output they have opened. Treat it as " +
+        "authoritative results for this cached run (cache_key " +
+        (result.cache_key || "unknown") + "), which may expire; read explanation " +
+        "reasons together with the attributes for the same explanation.\n\n";
+
+      // Standard MCP Apps (SEP-1865) channel for pushing information into the
+      // model's context. Sent as a ui/update-model-context request over the
+      // host postMessage bridge; the response is best-effort and ignored.
+      const id = state.nextId++;
+      new Promise((resolve, reject) => {
+        state.pendingCalls.set(id, { resolve, reject });
+        window.setTimeout(() => {
+          if (state.pendingCalls.has(id)) {
+            state.pendingCalls.delete(id);
+            reject(new Error("timeout"));
+          }
+        }, 60000);
+      }).catch(() => {});
+      window.parent.postMessage(
+        {
+          jsonrpc: "2.0",
+          id: id,
+          method: "ui/update-model-context",
+          params: {
+            content: [{ type: "text", text: intro + body }],
+            structuredContent: {
+              question_id: input.question_id,
+              cache_key: result.cache_key,
+              entries: entries
+            }
+          }
+        },
+        "*"
+      );
+    }
+
     async function loadAnswers() {
       const result = state.toolResult || {};
       if (!result.cache_key) {
@@ -709,6 +785,10 @@
         const count = Number.isInteger(answer.explanation_count) ? answer.explanation_count : 0;
         const item = makeDisclosure("Answer " + (position + 1) + " (" + count + " explanations)", "");
         renderBindings(item.children, answer.bindings);
+        const bindingText = parseBindingEntries(answer.bindings)
+          .map(([name, value]) => "- " + (name ? name + ": " : "") + value)
+          .join("\n");
+        recordShared("Answer " + (position + 1) + " — bindings", bindingText);
         const explanationHost = document.createElement("div");
         item.children.appendChild(explanationHost);
         item.button.addEventListener("click", () => {
@@ -780,10 +860,19 @@
         })));
         clear(target);
         const data = response && Object.prototype.hasOwnProperty.call(response, "data") ? response.data : response;
+        const heading =
+          "Answer " + (answerIndex + 1) + ", explanation " + (explanationIndex + 1) +
+          " — " + partName.replace(/_/g, " ");
         if (partName === "explanation") {
           renderExplanationTree(target, data);
+          recordShared(heading, explanationTreeToText(parseExplanationTree(data), 0));
         } else {
           renderSimpleList(target, data);
+          const body = normalizeLineItems(data)
+            .map((item) => "- " + htmlToText(text(item)))
+            .filter((line) => line !== "- ")
+            .join("\n");
+          recordShared(heading, body);
         }
       } catch (err) {
         clear(target);
