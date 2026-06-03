@@ -277,16 +277,20 @@ def test_mcp_tools_keep_structured_output_schemas():
             assert tool.fn_metadata.output_schema is not None, name
 
 
-def test_ask_tools_expose_answer_viewer_ui_metadata():
+def test_view_answers_tool_exposes_ui_metadata_and_ask_tools_do_not():
     from blawx_mcp import server
 
     expected = {"ui": {"resourceUri": "ui://blawx/answers", "visibility": ["model", "app"]}}
+    tools = server.mcp._tool_manager._tools
 
-    assert server.mcp._tool_manager._tools["blawx_question_ask_with_fact_scenario"].meta == expected
-    assert server.mcp._tool_manager._tools["blawx_question_ask_with_facts"].meta == expected
+    # Per MCP Apps, the host renders based on the tool's declared UI metadata.
+    # Only the dedicated view tool declares it, so the ask tools never render.
+    assert tools["blawx_view_answers"].meta == expected
+    assert tools["blawx_question_ask_with_fact_scenario"].meta is None
+    assert tools["blawx_question_ask_with_facts"].meta is None
 
 
-def test_ask_tools_serialize_answer_viewer_ui_metadata_in_tools_list():
+def test_view_answers_serializes_ui_metadata_in_tools_list():
     from blawx_mcp import server
 
     async def run():
@@ -295,15 +299,12 @@ def test_ask_tools_serialize_answer_viewer_ui_metadata_in_tools_list():
     tools = {tool.name: tool.model_dump(by_alias=True, exclude_none=True) for tool in asyncio.run(run())}
     expected = {"ui": {"resourceUri": "ui://blawx/answers", "visibility": ["model", "app"]}}
 
-    assert tools["blawx_question_ask_with_fact_scenario"]["_meta"] == expected
-    assert tools["blawx_question_ask_with_facts"]["_meta"] == expected
+    assert tools["blawx_view_answers"]["_meta"] == expected
+    assert "_meta" not in tools["blawx_question_ask_with_fact_scenario"]
+    assert "_meta" not in tools["blawx_question_ask_with_facts"]
 
 
-def test_ask_tool_result_exposes_ui_meta_and_structured_content_only(monkeypatch):
-    from blawx_mcp import server
-
-    captured = {}
-
+def _fake_ask_body(captured):
     async def fake_project_request_body(**kwargs):
         captured.update(kwargs)
         return {
@@ -317,12 +318,19 @@ def test_ask_tool_result_exposes_ui_meta_and_structured_content_only(monkeypatch
             },
         }
 
-    monkeypatch.setattr(server, "_project_request_body", fake_project_request_body)
+    return fake_project_request_body
+
+
+def test_view_answers_result_exposes_ui_meta_and_structured_content_only(monkeypatch):
+    from blawx_mcp import server
+
+    captured = {}
+    monkeypatch.setattr(server, "_project_request_body", _fake_ask_body(captured))
 
     async def run():
         return await server.mcp.call_tool(
-            "blawx_question_ask_with_fact_scenario",
-            {"team_slug": "team", "project_id": 1, "question_id": 2, "fact_scenario_id": 3},
+            "blawx_view_answers",
+            {"team_slug": "team", "project_id": 1, "question_id": 2, "cache_key": "cache-123"},
         )
 
     converted = asyncio.run(run())
@@ -330,7 +338,32 @@ def test_ask_tool_result_exposes_ui_meta_and_structured_content_only(monkeypatch
     assert converted.meta == {"ui": {"resourceUri": "ui://blawx/answers", "visibility": ["model", "app"]}}
     assert converted.structuredContent["cache_key"] == "cache-123"
     assert converted.content == []
-    assert captured["params"] == {"output_styles": ["human", "scasp"], "cached": True}
+    # It fetches the cached-response metadata endpoint for the given cache_key.
+    assert "/responses/cache-123/" in captured["reasoner_path"]
+
+
+def test_ask_tool_default_returns_plain_readable_result(monkeypatch):
+    from blawx_mcp import server
+
+    captured = {}
+    monkeypatch.setattr(server, "_project_request_body", _fake_ask_body(captured))
+
+    async def run():
+        # The ask tools always return a plain, agent-readable result (no UI).
+        return await server.mcp.call_tool(
+            "blawx_question_ask_with_fact_scenario",
+            {"team_slug": "team", "project_id": 1, "question_id": 2, "fact_scenario_id": 3},
+        )
+
+    converted = asyncio.run(run())
+
+    # A plain dict return (no CallToolResult/UI meta) surfaces as a
+    # (content, structured) tuple: readable text block plus structured content
+    # for any non-app host.
+    assert isinstance(converted, tuple)
+    content, structured = converted
+    assert structured["cache_key"] == "cache-123"
+    assert any("cache-123" in getattr(block, "text", "") for block in content)
 
 
 def test_ask_tool_accepts_custom_output_styles(monkeypatch):

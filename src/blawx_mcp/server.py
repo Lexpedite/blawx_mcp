@@ -1136,7 +1136,7 @@ async def blawx_question_delete(team_slug: str, project_id: int, question_id: in
     )
 
 
-@mcp.tool(meta=_ANSWER_VIEWER_META)
+@mcp.tool()
 async def blawx_question_ask_with_fact_scenario(
     team_slug: str,
     project_id: int,
@@ -1150,6 +1150,10 @@ async def blawx_question_ask_with_fact_scenario(
         `output_styles` defaults to `["human", "scasp"]` so follow-up explanation
         tools can retrieve both human list parts and the structured NiceTree
         explanation tree.
+
+        To let the user explore the answers and explanations visually, pass the
+        returned `cache_key` to `blawx_view_answers`, which renders the
+        interactive Blawx answer viewer.
 
         If the Blawx server returns an unexpected response shape instead of a cached-response
         payload, this tool returns the raw server response in `body` together with an `error`
@@ -1178,31 +1182,27 @@ async def blawx_question_ask_with_fact_scenario(
     try:
         cache_key = _extract_cache_key(body)
     except RuntimeError:
-        return _answer_viewer_tool_result(
-            _unexpected_response_result(
-                resp,
-                error="Expected cached ask response including cache_key, but Blawx returned a different response.",
-                note=(
-                    "The raw Blawx response is preserved in `body`. This usually means the ask endpoint "
-                    "returned an error payload, a non-cached response, or a response schema this MCP server "
-                    "does not recognize."
-                ),
-            )
+        return _unexpected_response_result(
+            resp,
+            error="Expected cached ask response including cache_key, but Blawx returned a different response.",
+            note=(
+                "The raw Blawx response is preserved in `body`. This usually means the ask endpoint "
+                "returned an error payload, a non-cached response, or a response schema this MCP server "
+                "does not recognize."
+            ),
         )
-    return _answer_viewer_tool_result(
-        {
-            "ok": resp["ok"],
-            "status_code": resp["status_code"],
-            "cache_key": cache_key,
-            "body": body,
-            "ttl_seconds": _extract_optional_int(body, "ttl_seconds"),
-            "created_at": _extract_optional_str(body, "created_at"),
-            "answer_count": _extract_optional_int(body, "answer_count"),
-        }
-    )
+    return {
+        "ok": resp["ok"],
+        "status_code": resp["status_code"],
+        "cache_key": cache_key,
+        "body": body,
+        "ttl_seconds": _extract_optional_int(body, "ttl_seconds"),
+        "created_at": _extract_optional_str(body, "created_at"),
+        "answer_count": _extract_optional_int(body, "answer_count"),
+    }
 
 
-@mcp.tool(meta=_ANSWER_VIEWER_META)
+@mcp.tool()
 async def blawx_question_ask_with_facts(
     team_slug: str,
     project_id: int,
@@ -1216,6 +1216,10 @@ async def blawx_question_ask_with_facts(
         `output_styles` defaults to `["human", "scasp"]` so follow-up explanation
         tools can retrieve both human list parts and the structured NiceTree
         explanation tree.
+
+        To let the user explore the answers and explanations visually, pass the
+        returned `cache_key` to `blawx_view_answers`, which renders the
+        interactive Blawx answer viewer.
 
         If the Blawx server returns an unexpected response shape instead of a cached-response
         payload, this tool returns the raw server response in `body` together with an `error`
@@ -1298,28 +1302,67 @@ async def blawx_question_ask_with_facts(
     try:
         cache_key = _extract_cache_key(body)
     except RuntimeError:
-        return _answer_viewer_tool_result(
-            _unexpected_response_result(
-                resp,
-                error="Expected cached ask response including cache_key, but Blawx returned a different response.",
-                note=(
-                    "The raw Blawx response is preserved in `body`. This usually means the ask endpoint "
-                    "returned an error payload, a non-cached response, or a response schema this MCP server "
-                    "does not recognize."
-                ),
-            )
+        return _unexpected_response_result(
+            resp,
+            error="Expected cached ask response including cache_key, but Blawx returned a different response.",
+            note=(
+                "The raw Blawx response is preserved in `body`. This usually means the ask endpoint "
+                "returned an error payload, a non-cached response, or a response schema this MCP server "
+                "does not recognize."
+            ),
         )
-    return _answer_viewer_tool_result(
-        {
-            "ok": resp["ok"],
-            "status_code": resp["status_code"],
-            "cache_key": cache_key,
-            "body": body,
-            "ttl_seconds": _extract_optional_int(body, "ttl_seconds"),
-            "created_at": _extract_optional_str(body, "created_at"),
-            "answer_count": _extract_optional_int(body, "answer_count"),
-        }
+    return {
+        "ok": resp["ok"],
+        "status_code": resp["status_code"],
+        "cache_key": cache_key,
+        "body": body,
+        "ttl_seconds": _extract_optional_int(body, "ttl_seconds"),
+        "created_at": _extract_optional_str(body, "created_at"),
+        "answer_count": _extract_optional_int(body, "answer_count"),
+    }
+
+
+@mcp.tool(meta=_ANSWER_VIEWER_META)
+async def blawx_view_answers(
+    team_slug: str,
+    project_id: int,
+    question_id: int,
+    cache_key: str,
+) -> dict[str, Any]:
+    """Render a cached question response in the interactive Blawx answer viewer.
+
+    Use this when the user wants to explore answers, bindings, and nested
+    explanations visually. Pass a `cache_key` returned by one of the ask tools
+    (`blawx_question_ask_with_fact_scenario` or `blawx_question_ask_with_facts`).
+
+    This tool carries the answer-viewer UI metadata, so a host that supports
+    MCP Apps renders the viewer for the cached response. The viewer then loads
+    answers and explanation parts on demand via the retrieval tools.
+
+    Returns cached-response metadata (cache_key, ttl, created time, answer count
+    when available). If `status_code` is 410, the cache key has expired and you
+    must re-run an ask tool to obtain a fresh one.
+    """
+
+    resp = await _project_request_body(
+        method="GET",
+        project_id=project_id,
+        team_slug=team_slug,
+        reasoner_path=f"questions/{question_id}/responses/{cache_key}/",
+        timeout_seconds=30.0,
     )
+
+    body = resp.get("body")
+    result = {
+        "ok": resp["ok"],
+        "status_code": resp["status_code"],
+        "cache_key": cache_key,
+        "ttl_seconds": _extract_optional_int(body, "ttl_seconds"),
+        "created_at": _extract_optional_str(body, "created_at"),
+        "answer_count": _extract_optional_int(body, "answer_count"),
+        "body": body,
+    }
+    return _answer_viewer_tool_result(result)
 
 
 @mcp.tool()
