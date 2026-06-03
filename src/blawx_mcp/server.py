@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import logging
 import os
+import re
 import sys
 from importlib import resources
 from typing import Any
@@ -42,7 +43,7 @@ _ANSWER_VIEWER_MIME_TYPE = "text/html;profile=mcp-app"
 _ANSWER_VIEWER_META = {"ui": {"resourceUri": _ANSWER_VIEWER_RESOURCE_URI, "visibility": ["model", "app"]}}
 _ANSWER_VIEWER_TITLE = "Blawx Answer Viewer"
 _ANSWER_VIEWER_DESCRIPTION = "Explore Blawx cached question answers and explanations."
-_DEFAULT_ASK_OUTPUT_STYLES = ["human", "nice"]
+_DEFAULT_ASK_OUTPUT_STYLES = ["human", "scasp"]
 
 
 def _env_int(name: str, default: int) -> int:
@@ -337,6 +338,26 @@ _PART_INTERNAL_TO_PUBLIC: dict[str, str] = {
 
 def _public_part_name(internal: str) -> str:
     return _PART_INTERNAL_TO_PUBLIC.get(internal, internal)
+
+
+# Matches root-relative href values (e.g. href="/a/team/...") but not
+# protocol-relative ones (href="//host/...").
+_RELATIVE_HREF_RE = re.compile(r"""(href\s*=\s*)(["'])(/(?!/)[^"']*)\2""")
+
+
+def _absolutize_links(value: str, base_url: str) -> str:
+    """Rewrite root-relative href values to absolute URLs on the Blawx server.
+
+    Explanation and model text include legislation links like
+    `<a href="/a/team/project/...">` that only resolve against the configured
+    Blawx server. Prefix them with the configured base URL so they open
+    correctly from any client.
+    """
+    base = base_url.rstrip("/")
+    return _RELATIVE_HREF_RE.sub(
+        lambda m: f"{m.group(1)}{m.group(2)}{base}{m.group(3)}{m.group(2)}",
+        value,
+    )
 
 
 def _annotate_blawx_json_error(result: dict[str, Any]) -> dict[str, Any]:
@@ -1126,7 +1147,7 @@ async def blawx_question_ask_with_fact_scenario(
     """Ask a question using a stored fact scenario.
 
         Returns a cache key for later retrieval.
-        `output_styles` defaults to `["human", "nice"]` so follow-up explanation
+        `output_styles` defaults to `["human", "scasp"]` so follow-up explanation
         tools can retrieve both human list parts and the structured NiceTree
         explanation tree.
 
@@ -1192,7 +1213,7 @@ async def blawx_question_ask_with_facts(
     """Ask a question using a structured facts payload.
 
         Returns a cache key for later retrieval.
-        `output_styles` defaults to `["human", "nice"]` so follow-up explanation
+        `output_styles` defaults to `["human", "scasp"]` so follow-up explanation
         tools can retrieve both human list parts and the structured NiceTree
         explanation tree.
 
@@ -1865,6 +1886,9 @@ async def _get_part(
     )
     body = resp.get("body")
     if isinstance(body, dict):
+        data = body.get("data")
+        if isinstance(data, str) and "href" in data:
+            data = _absolutize_links(data, get_settings().base_url)
         # Matches CachedResponseExplanationPart.
         return {
             "ok": resp["ok"],
@@ -1874,7 +1898,7 @@ async def _get_part(
             "start": body.get("start"),
             "end": body.get("end"),
             "total": body.get("total"),
-            "data": body.get("data"),
+            "data": data,
         }
 
     # Fallback for non-JSON or unexpected responses.
@@ -1903,6 +1927,10 @@ async def blawx_get_model_part(
     end: int | None = None,
 ) -> dict[str, Any]:
     """Get the model portion of an explanation.
+
+    Uses the HumanModel part: one natural-language fact per line (e.g.
+    `testgame is a game`, `the winner of testgame was jane`). Conclusions
+    derived from legislation include an HTML link to the relevant section.
 
     Uses optional 1-based inclusive line slicing via start/end.
     Returns an object with fields: part, type, start, end, total, data.

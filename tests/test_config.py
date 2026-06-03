@@ -330,7 +330,7 @@ def test_ask_tool_result_exposes_ui_meta_and_structured_content_only(monkeypatch
     assert converted.meta == {"ui": {"resourceUri": "ui://blawx/answers", "visibility": ["model", "app"]}}
     assert converted.structuredContent["cache_key"] == "cache-123"
     assert converted.content == []
-    assert captured["params"] == {"output_styles": ["human", "nice"], "cached": True}
+    assert captured["params"] == {"output_styles": ["human", "scasp"], "cached": True}
 
 
 def test_ask_tool_accepts_custom_output_styles(monkeypatch):
@@ -352,13 +352,13 @@ def test_ask_tool_accepts_custom_output_styles(monkeypatch):
                 "project_id": 1,
                 "question_id": 2,
                 "fact_scenario_id": 3,
-                "output_styles": ["nice"],
+                "output_styles": ["raw"],
             },
         )
 
     asyncio.run(run())
 
-    assert captured["params"] == {"output_styles": ["nice"], "cached": True}
+    assert captured["params"] == {"output_styles": ["raw"], "cached": True}
 
 
 def test_answer_viewer_resource_registered():
@@ -396,6 +396,63 @@ def test_explanation_part_uses_structured_nice_tree(monkeypatch):
     assert result["data"] == nice_tree
 
 
+def test_model_part_uses_human_model(monkeypatch):
+    from blawx_mcp import server
+
+    captured = {}
+    human_model = "testgame is a game\nthe winner of testgame was jane"
+
+    async def fake_project_request_body(**kwargs):
+        captured.update(kwargs)
+        return {
+            "status_code": 200,
+            "ok": True,
+            "body": {"part": "HumanModel", "type": "list", "start": None, "end": None, "total": 2, "data": human_model},
+        }
+
+    monkeypatch.setattr(server, "_project_request_body", fake_project_request_body)
+
+    async def run():
+        return await server.blawx_get_model_part("team", 1, 2, "cache", 0, 0)
+
+    result = asyncio.run(run())
+
+    # The model uses the natural-language HumanModel part. The viewer is
+    # responsible for splitting it on newlines that fall outside HTML links.
+    assert "/explanations/0/HumanModel/" in captured["reasoner_path"]
+    assert result["part"] == "model"
+    assert result["data"] == human_model
+
+
+def test_explanation_part_absolutizes_links(monkeypatch):
+    from blawx_mcp import server
+    from blawx_mcp.config import Settings
+
+    data = 'according to <a href="/a/team/project/1/legaldocs/ld/4/ldp/21/">RPSA Section 4.</a>'
+
+    async def fake_project_request_body(**kwargs):
+        return {
+            "status_code": 200,
+            "ok": True,
+            "body": {"part": "HumanModel", "type": "list", "start": None, "end": None, "total": 1, "data": data},
+        }
+
+    monkeypatch.setattr(server, "_project_request_body", fake_project_request_body)
+    monkeypatch.setattr(
+        server, "get_settings", lambda: Settings(base_url="https://app.blawx.dev", api_key="k")
+    )
+
+    async def run():
+        return await server.blawx_get_model_part("team", 1, 2, "cache", 0, 0)
+
+    result = asyncio.run(run())
+
+    # Root-relative legislation links are rewritten against the configured
+    # Blawx base URL so they resolve from any client.
+    assert 'href="https://app.blawx.dev/a/team/project/1/legaldocs/ld/4/ldp/21/"' in result["data"]
+    assert 'href="/a/' not in result["data"]
+
+
 def test_answer_viewer_resource_returns_html():
     from blawx_mcp import server
 
@@ -412,6 +469,43 @@ def test_answer_viewer_resource_returns_html():
     assert "item.conclusion" in contents[0].content
     assert "loadExplanations" in contents[0].content
     assert "loadPart" in contents[0].content
+
+
+def test_answer_viewer_parses_structured_nice_tree():
+    from blawx_mcp import server
+
+    async def run():
+        return await server.mcp.read_resource("ui://blawx/answers")
+
+    html = asyncio.run(run())[0].content
+
+    # The NiceTree explanation part arrives as a JSON-encoded string. The viewer
+    # must JSON.parse it (rather than line-splitting the JSON source) and walk
+    # the {conclusion, reasons} tree, unwrapping the synthetic "query" root.
+    assert "JSON.parse(trimmed)" in html
+    assert "data.reasons" in html
+    assert '=== "query"' in html
+
+    # Bindings come from the nice output as a "Variable: value" per-line string.
+    # The viewer must split them into a bolded-name bulleted list rather than
+    # rendering the whole string on one line.
+    assert "parseBindingEntries" in html
+    assert 'line.indexOf(":")' in html
+    assert "binding-name" in html
+
+    # The human-readable model embeds legislation links whose title attributes
+    # contain literal newlines. The viewer must split lines outside HTML tags so
+    # those <a> tags are not sheared in half, and render items as inline HTML.
+    assert "splitLinesOutsideTags" in html
+    assert "inTag" in html
+
+    # The disclosure caret is a real SVG icon that rotates (with a transition)
+    # between open/closed, rather than a swapped ">" text glyph.
+    assert 'class="caret"' in html
+    assert "<svg" in html
+    assert "transition: transform" in html
+    assert ".expanded > .row .caret" in html
+    assert "rotate(90deg)" in html
 
 
 def test_answer_viewer_packaged_as_package_data():

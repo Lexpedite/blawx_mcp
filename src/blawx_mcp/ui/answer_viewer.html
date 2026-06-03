@@ -3,6 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Open every link in a separate browser window/tab, not the embedded chat frame. -->
+  <base target="_blank">
   <title>Review Blawx Responses</title>
   <style>
     :root {
@@ -121,7 +123,7 @@
 
     .node {
       border-top: 1px solid var(--line);
-      padding: 10px 0;
+      padding: 3px 0;
     }
 
     .node:first-child {
@@ -131,23 +133,52 @@
     .row {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 4px;
       min-width: 0;
     }
 
     .chevron {
-      width: 26px;
-      height: 26px;
-      flex: 0 0 26px;
+      width: 14px;
+      height: 14px;
+      flex: 0 0 14px;
+      min-height: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      padding: 0;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       font-weight: 700;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .caret {
+      display: block;
+      transition: transform 0.18s ease;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .caret {
+        transition: none;
+      }
+    }
+
+    button.chevron:hover {
+      border: 0;
+      color: var(--accent);
     }
 
     .row-title {
       min-width: 0;
       font-weight: 700;
+    }
+
+    /* Explanation conclusions/reasons carry .inline-html; keep them unbolded
+       so only the structural headings (Answer, Explanation, part names) are bold. */
+    .row-title.inline-html {
+      font-weight: 400;
     }
 
     .summary {
@@ -157,8 +188,8 @@
 
     .children {
       display: none;
-      margin-left: 34px;
-      padding: 8px 0 0 12px;
+      margin-left: 11px;
+      padding: 3px 0 0 4px;
       border-left: 2px solid var(--line);
     }
 
@@ -166,7 +197,7 @@
       display: block;
     }
 
-    .expanded > .row .chevron {
+    .expanded > .row .caret {
       transform: rotate(90deg);
     }
 
@@ -346,7 +377,10 @@
       button.className = "chevron";
       button.type = "button";
       button.setAttribute("aria-label", "Expand");
-      button.textContent = ">";
+      button.innerHTML =
+        '<svg class="caret" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">' +
+        '<path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="2" ' +
+        'stroke-linecap="round" stroke-linejoin="round"/></svg>';
       const label = document.createElement("div");
       label.className = "row-title";
       label.textContent = title;
@@ -413,15 +447,58 @@
               return;
             }
           }
+          if (node.tagName === "A" && name === "title") {
+            return; // keep the legislation tooltip text from NiceTree conclusions
+          }
           node.removeAttribute(attr.name);
         });
       });
     }
 
+    function splitLinesOutsideTags(value) {
+      // Split on newlines, but ignore any that fall inside an HTML tag. The
+      // human-readable model embeds legislation links whose title="..."
+      // attributes contain literal newlines; a naive split on /\r?\n/ would
+      // shear those <a> tags in half. Track tag/quote state so only top-level
+      // newlines (the real line separators) split the string.
+      const lines = [];
+      let current = "";
+      let inTag = false;
+      let quote = "";
+      for (let i = 0; i < value.length; i++) {
+        const ch = value[i];
+        if (inTag) {
+          if (quote) {
+            if (ch === quote) quote = "";
+          } else if (ch === '"' || ch === "'") {
+            quote = ch;
+          } else if (ch === ">") {
+            inTag = false;
+          }
+          current += ch;
+          continue;
+        }
+        if (ch === "<") {
+          inTag = true;
+          current += ch;
+          continue;
+        }
+        if (ch === "\n" || ch === "\r") {
+          if (ch === "\r" && value[i + 1] === "\n") i++;
+          lines.push(current);
+          current = "";
+          continue;
+        }
+        current += ch;
+      }
+      lines.push(current);
+      return lines.map((line) => line.trim()).filter(Boolean);
+    }
+
     function normalizeLineItems(data) {
       if (Array.isArray(data)) return data;
       if (typeof data === "string") {
-        return data.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+        return splitLinesOutsideTags(data);
       }
       if (data === null || data === undefined) return [];
       return [data];
@@ -438,15 +515,40 @@
       list.className = "simple-list";
       items.forEach((item) => {
         const li = document.createElement("li");
-        li.textContent = text(item);
+        // Items may contain legislation links (sanitized), so render as inline
+        // HTML; plain-text items fall back to textContent inside appendInlineHtml.
+        li.className = "inline-html";
+        appendInlineHtml(li, item);
         list.appendChild(li);
       });
       parent.appendChild(list);
     }
 
     function parseExplanationTree(data) {
-      if (data && typeof data === "object" && !Array.isArray(data) && Array.isArray(data.reasons) && !data.conclusion) {
-        return data.reasons.map((item) => normalizeExplanationNode(item));
+      // The structured (NiceTree) explanation arrives as a JSON-encoded string
+      // with shape {conclusion, reasons:[...]} (leaf nodes omit `reasons`).
+      // Parse it before anything else so we render the real tree instead of
+      // splitting the JSON source on newlines like the human bullet text below.
+      if (typeof data === "string") {
+        const trimmed = data.trim();
+        if (trimmed && (trimmed[0] === "{" || trimmed[0] === "[")) {
+          try {
+            data = JSON.parse(trimmed);
+          } catch (err) {
+            // Not JSON - fall through to the human bullet-list parser below.
+          }
+        }
+      }
+
+      if (data && typeof data === "object" && !Array.isArray(data)) {
+        const reasons = Array.isArray(data.reasons) ? data.reasons : null;
+        // Drop the synthetic root ("query", or a conclusion-less wrapper) so
+        // the meaningful conclusions sit at the top level instead of hiding
+        // behind an extra disclosure.
+        if (reasons && (!data.conclusion || String(data.conclusion).trim().toLowerCase() === "query")) {
+          return reasons.map((item) => normalizeExplanationNode(item));
+        }
+        return [normalizeExplanationNode(data)];
       }
       if (Array.isArray(data)) {
         return data.map((item) => normalizeExplanationNode(item));
@@ -517,34 +619,58 @@
       });
     }
 
-    function renderBindings(parent, bindings) {
-      if (!bindings) {
-        appendText(parent, "div", "No bindings.", "empty");
-        return;
-      }
-
+    function parseBindingEntries(bindings) {
+      // Bindings arrive from the nice output as a newline-separated
+      // "Variable: value" string (e.g. "Game: testgame\nPlayer: jane"). Some
+      // deployments may instead send a JSON object; handle both, plus an
+      // already-parsed object, and normalise to [name, value] pairs.
       let parsed = bindings;
       if (typeof bindings === "string") {
-        try {
-          parsed = JSON.parse(bindings);
-        } catch (_err) {
-          appendText(parent, "div", bindings, "empty");
-          return;
+        const trimmed = bindings.trim();
+        if (trimmed && (trimmed[0] === "{" || trimmed[0] === "[")) {
+          try {
+            parsed = JSON.parse(trimmed);
+          } catch (_err) {
+            parsed = bindings;
+          }
         }
       }
 
-      if (typeof parsed !== "object" || Array.isArray(parsed) || Object.keys(parsed).length === 0) {
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return Object.entries(parsed).map(([name, value]) => [name, text(value)]);
+      }
+
+      if (typeof parsed === "string") {
+        return parsed
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .map((line) => {
+            const idx = line.indexOf(":");
+            if (idx === -1) return ["", line];
+            return [line.slice(0, idx).trim(), line.slice(idx + 1).trim()];
+          });
+      }
+
+      return [];
+    }
+
+    function renderBindings(parent, bindings) {
+      const entries = bindings ? parseBindingEntries(bindings) : [];
+      if (!entries.length) {
         appendText(parent, "div", "No bindings.", "empty");
         return;
       }
 
       const list = document.createElement("ul");
       list.className = "bindings";
-      Object.entries(parsed).forEach(([key, value]) => {
+      entries.forEach(([name, value]) => {
         const item = document.createElement("li");
-        const name = appendText(item, "span", key + ": ", "binding-name");
-        name.setAttribute("aria-label", key);
-        item.appendChild(document.createTextNode(text(value)));
+        if (name) {
+          const label = appendText(item, "span", name + ": ", "binding-name");
+          label.setAttribute("aria-label", name);
+        }
+        item.appendChild(document.createTextNode(value));
         list.appendChild(item);
       });
       parent.appendChild(list);
