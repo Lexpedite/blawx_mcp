@@ -125,7 +125,9 @@
       toolInput: null,
       toolResult: null,
       rendered: false,
-      nextId: 1
+      nextId: 1,
+      heightObserver: null,
+      heightFrame: 0
     };
 
     const el = {
@@ -148,6 +150,9 @@
         el.status.appendChild(pre);
       }
       el.area.hidden = true;
+      // The error panel is content too — measure it so the frame fits.
+      installHeightSync();
+      requestAnimationFrame(reportHeight);
     }
 
     function unwrapToolResult(result) {
@@ -167,14 +172,52 @@
       return result;
     }
 
+    // -----------------------------------------------------------------------
+    // TEMPORARY WORKAROUND (remove when claude.ai is fixed).
+    //
+    // The spec says the host listens for ui/notifications/size-changed and
+    // resizes the iframe to match. claude.ai does not: it sizes the frame by
+    // reading our documentElement height directly off the DOM (same-origin
+    // blob: URL) and ignores the resize notifications entirely. So we measure
+    // the rendered content and write the height onto <html> ourselves, and a
+    // ResizeObserver keeps it in step with later Blockly resizes.
+    //
+    // This is tracked as anthropics/claude-ai-mcp issue #69. Once that ships a
+    // fix, the documentElement.style.height writes here and installHeightSync()
+    // can be deleted — the ui/notifications/size-changed post is the
+    // spec-compliant path and should stay.
+    // -----------------------------------------------------------------------
     function reportHeight() {
-      // Best-effort: ask the host to resize the frame to our content. Hosts that
-      // auto-measure ignore this; it is harmless where unsupported.
-      const height = Math.ceil(document.body.scrollHeight);
+      // Reset to "auto" first so a previously-written value can't lock the
+      // frame small, then measure and write the real content height.
+      const doc = document.documentElement;
+      doc.style.height = "auto";
+      const height = Math.ceil(doc.scrollHeight);
+      doc.style.height = height + "px";
+      // Keep speaking the spec for hosts that do listen (Goose, VS Code, MCP
+      // Inspector). Harmless where the host auto-measures instead.
+      window.parent.postMessage(
+        { jsonrpc: "2.0", method: "ui/notifications/size-changed", params: { height: height } },
+        "*"
+      );
       window.parent.postMessage(
         { jsonrpc: "2.0", method: "ui/size-frame", params: { height: height } },
         "*"
       );
+    }
+
+    function installHeightSync() {
+      // Attach AFTER the workspace renders so the first measurement isn't zero.
+      // Blockly resizes its canvas asynchronously, so keep tracking changes.
+      if (state.heightObserver || typeof ResizeObserver === "undefined") return;
+      state.heightObserver = new ResizeObserver(() => {
+        if (state.heightFrame) return;
+        state.heightFrame = window.requestAnimationFrame(() => {
+          state.heightFrame = 0;
+          reportHeight();
+        });
+      });
+      state.heightObserver.observe(document.body);
     }
 
     function renderWorkspace() {
@@ -218,7 +261,9 @@
           el.area.style.height = out.height + "px";
         }
         state.rendered = true;
-        // Allow layout to settle, then report content height.
+        // Allow layout to settle, then measure, write the height onto <html>,
+        // and keep it in step with any later Blockly resizes.
+        installHeightSync();
         requestAnimationFrame(() => requestAnimationFrame(reportHeight));
       } catch (err) {
         showError("Could not render the Blawx workspace.", (err && err.message) || String(err));
