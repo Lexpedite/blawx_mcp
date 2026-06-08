@@ -906,6 +906,31 @@
       }
     }
 
+    function openExternalLink(url) {
+      // The app runs in a sandboxed iframe (allow-scripts, allow-same-origin)
+      // without allow-popups/allow-top-navigation, so a normal click on a
+      // target=_blank link is silently blocked by the browser. Ask the host to
+      // open it via the MCP Apps (SEP-1865) ui/open-link bridge, which ChatGPT,
+      // Claude, and other spec hosts all speak. If a host doesn't honour it,
+      // behaviour is unchanged (right-click still offers "Open in browser").
+      window.parent.postMessage(
+        { jsonrpc: "2.0", id: state.nextId++, method: "ui/open-link", params: { url: url } },
+        "*"
+      );
+    }
+
+    document.addEventListener("click", (event) => {
+      if (event.defaultPrevented || event.button !== 0) return;
+      const anchor = event.target && event.target.closest ? event.target.closest("a[href]") : null;
+      if (!anchor) return;
+      const href = anchor.getAttribute("href") || "";
+      // Leave in-page (#...) anchors to the browser; route real external links
+      // through the host so they actually open.
+      if (!/^(https?:|mailto:)/i.test(href)) return;
+      event.preventDefault();
+      openExternalLink(href);
+    });
+
     window.addEventListener("message", (event) => {
       const message = event.data || {};
       if (message.id && state.pendingCalls.has(message.id)) {
