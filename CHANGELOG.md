@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows Semantic Versioning.
 
-## [0.6.0] - 2026-06-07
+## [0.7.0] - 2026-06-07
 
 ### Added
 - Added `blawx_view_code`, a read-only Blawx code viewer MCP App that renders an arbitrary `blawx_json` workspace as Blawx blocks (no toolbox, drawers, code generation, or editing). The `blawx_json` can be agent-authored or taken from the `body` of `blawx_question_detail`, `blawx_fact_scenario_detail`, or `blawx_encodingpart_get`.
@@ -12,7 +12,19 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Added tests covering the viewer tool's UI metadata, workspace pass-through, input validation, resource self-containment, and asset packaging.
 
 ### Changed
-- Extended `[tool.setuptools.package-data]` to ship the viewer bundle and vendored Blockly assets, and bumped the version to `0.6.0`.
+- Extended `[tool.setuptools.package-data]` to ship the viewer bundle and vendored Blockly assets, and bumped the version to `0.7.0`.
+
+## [0.6.0] - 2026-06-02
+
+### Added
+- Added the Blawx answer viewer MCP App: the `blawx_view_answers` tool and the `ui://blawx/answers` resource (`ui/answer_viewer.html`), which let users interactively explore a cached question response — answers, bindings, and nested explanations — directly in MCP Apps hosts.
+- Added structured NiceTree explanations: `blawx_get_explanation_part` returns the explanation as a `{conclusion, reasons}` tree, and the ask tools default to `output_styles = ["human", "scasp"]` so both human-readable and structured parts are available.
+- Added in-app model context sharing: content the user opens in the answer viewer is mirrored back into the model context via the standard MCP Apps `ui/update-model-context` request.
+- Added tests covering the answer viewer's UI metadata, the cached-response result shape, structured NiceTree parsing, and link absolutization.
+
+### Changed
+- Reshaped the ask tools (`blawx_question_ask_with_fact_scenario`, `blawx_question_ask_with_facts`) and `blawx_view_answers` to return a `CallToolResult` carrying MCP Apps UI metadata (`_meta.ui`) so supporting hosts render the viewer, while non-app hosts still receive readable structured content.
+- Absolutized root-relative legislation links in model and explanation parts against the configured Blawx base URL so they resolve from any client.
 
 ## [0.5.0] - 2026-05-17
 

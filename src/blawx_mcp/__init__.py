@@ -3,4 +3,4 @@ from .server import mcp
 
 __all__ = ["mcp", "Settings", "get_settings", "settings_context"]
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"
