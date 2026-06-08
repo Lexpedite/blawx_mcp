@@ -256,7 +256,9 @@
       // Human-readable content the user has opened, keyed by heading. Mirrored
       // to the model silently via shareWithModel() so the chat knows what the
       // user has seen.
-      shared: new Map()
+      shared: new Map(),
+      heightObserver: null,
+      heightFrame: 0
     };
 
     const partTools = [
@@ -956,9 +958,68 @@
       });
     }
 
+    // ---------------------------------------------------------------------
+    // TEMPORARY WORKAROUND (remove when claude.ai is fixed).
+    //
+    // The spec says the host listens for ui/notifications/size-changed and
+    // resizes the iframe to match. claude.ai does not: it sizes the frame by
+    // reading our documentElement height directly off the DOM (same-origin
+    // blob: URL) and ignores the resize notifications entirely. So we measure
+    // the rendered content and write the height onto <html> ourselves, and a
+    // ResizeObserver keeps it in step as content changes.
+    //
+    // This is tracked as anthropics/claude-ai-mcp issue #69. Once that ships a
+    // fix, the documentElement.style.height writes here, scheduleSync(), and
+    // installHeightSync() can be deleted — the ui/notifications/size-changed
+    // post (notifySizeChanged) is the spec-compliant path and should stay.
+    // ---------------------------------------------------------------------
+    function syncHeight() {
+      // Reset to "auto" first so a previously-written value can't lock the
+      // frame small, then measure and write the real content height.
+      const doc = document.documentElement;
+      doc.style.height = "auto";
+      const height = Math.ceil(doc.scrollHeight);
+      doc.style.height = height + "px";
+      notifySizeChanged(height);
+    }
+
+    function notifySizeChanged(height) {
+      // Keep speaking the spec for hosts that do listen (Goose, VS Code, MCP
+      // Inspector). Harmless where the host auto-measures instead.
+      window.parent.postMessage(
+        { jsonrpc: "2.0", method: "ui/notifications/size-changed", params: { height: height } },
+        "*"
+      );
+    }
+
+    function scheduleSync() {
+      // Coalesce bursts (each disclosure expand/async load fires the observer)
+      // into a single post-layout measurement, which also avoids the
+      // ResizeObserver loop guard.
+      if (state.heightFrame) return;
+      state.heightFrame = window.requestAnimationFrame(() => {
+        state.heightFrame = 0;
+        syncHeight();
+      });
+    }
+
+    function installHeightSync() {
+      // Attach AFTER first render so the initial measurement isn't zero. The
+      // observer keeps the frame in step as the user expands answers and parts
+      // load asynchronously.
+      if (state.heightObserver || typeof ResizeObserver === "undefined") return;
+      state.heightObserver = new ResizeObserver(scheduleSync);
+      state.heightObserver.observe(document.body);
+    }
+
     window.parent.postMessage({ jsonrpc: "2.0", method: "ui/initialize", params: {} }, "*");
     window.parent.postMessage({ jsonrpc: "2.0", method: "ui/notifications/initialized", params: {} }, "*");
     maybeRender();
+    // Measure once the first paint has happened, then track changes live.
+    window.requestAnimationFrame(() => {
+      installHeightSync();
+      syncHeight();
+    });
   </script>
 </body>
 </html>

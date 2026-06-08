@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows Semantic Versioning.
 
+## [0.7.1b] - 2026-06-08
+
+### Fixed
+- Fixed the vertical sizing of both MCP App viewers (`ui/answer_viewer.html`, `ui/code_viewer.html`) in claude.ai, which would lock the iframe at a tiny height. claude.ai diverges from the MCP Apps spec: rather than resizing on `ui/notifications/size-changed` notifications, it reads the app's `documentElement` height directly off the DOM. Both viewers now measure their rendered content and write the height onto `<html>` themselves, and a `ResizeObserver` keeps the frame in step as content changes (answers/parts expand; Blockly resizes). The spec-compliant `ui/notifications/size-changed` post is still sent for hosts that honour it.
+
+### Notes
+- The `documentElement.style.height` workaround in both viewers is **temporary**, tracked as `anthropics/claude-ai-mcp` issue #69. It is marked `TEMPORARY WORKAROUND` in the source and can be removed once claude.ai resizes app iframes per the spec; the `ui/notifications/size-changed` path should remain.
+
 ## [0.7.0] - 2026-06-07
 
 ### Added
