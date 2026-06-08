@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows Semantic Versioning.
 
+## [0.6.0] - 2026-06-07
+
+### Added
+- Added `blawx_view_code`, a read-only Blawx code viewer MCP App that renders an arbitrary `blawx_json` workspace as Blawx blocks (no toolbox, drawers, code generation, or editing). The `blawx_json` can be agent-authored or taken from the `body` of `blawx_question_detail`, `blawx_fact_scenario_detail`, or `blawx_encodingpart_get`.
+- Added the self-contained `ui://blawx/code-viewer` MCP App resource. The Blockly runtime (vendored under `ui/vendor/blockly/`) and the Blawx block definitions (`ui/viewer-bundle.js`, generated from the `blawx_saas` repo) are inlined at serve time, so the viewer needs no network access to render.
+- Added tests covering the viewer tool's UI metadata, workspace pass-through, input validation, resource self-containment, and asset packaging.
+
+### Changed
+- Extended `[tool.setuptools.package-data]` to ship the viewer bundle and vendored Blockly assets, and bumped the version to `0.6.0`.
+
 ## [0.5.0] - 2026-05-17
 
 ### Added

@@ -45,6 +45,23 @@ _ANSWER_VIEWER_TITLE = "Blawx Answer Viewer"
 _ANSWER_VIEWER_DESCRIPTION = "Explore Blawx cached question answers and explanations."
 _DEFAULT_ASK_OUTPUT_STYLES = ["human", "scasp"]
 
+_CODE_VIEWER_RESOURCE_URI = "ui://blawx/code-viewer"
+_CODE_VIEWER_MIME_TYPE = "text/html;profile=mcp-app"
+_CODE_VIEWER_META = {"ui": {"resourceUri": _CODE_VIEWER_RESOURCE_URI, "visibility": ["model", "app"]}}
+_CODE_VIEWER_TITLE = "Blawx Code Viewer"
+_CODE_VIEWER_DESCRIPTION = "Visualize an arbitrary Blawx workspace (a blawx_json object) as read-only Blawx blocks."
+
+# (placeholder marker in code_viewer.html, ui-relative asset path). The server
+# inlines each asset so the served resource is fully self-contained (no network
+# at runtime). Order matters: Blockly core/messages/blocks set the global
+# `Blockly`, then the viewer bundle registers the Blawx blocks against it.
+_VIEWER_ASSET_MARKERS: tuple[tuple[str, str], ...] = (
+    ("/*BLOCKLY_CORE*/", "vendor/blockly/blockly_compressed.js"),
+    ("/*BLOCKLY_MSG*/", "vendor/blockly/msg/en.js"),
+    ("/*BLOCKLY_BLOCKS*/", "vendor/blockly/blocks_compressed.js"),
+    ("/*VIEWER_BUNDLE*/", "viewer-bundle.js"),
+)
+
 
 def _env_int(name: str, default: int) -> int:
     raw = os.environ.get(name)
@@ -80,6 +97,28 @@ def _read_ui_resource(filename: str) -> str:
         return f"<!doctype html><title>Missing UI</title><p>Could not find {filename}.</p>"
 
 
+def _read_ui_asset(relpath: str) -> str:
+    """Read a UI asset that may live in a subdirectory of the ui/ package dir."""
+    node = resources.files("blawx_mcp") / "ui"
+    for part in relpath.split("/"):
+        node = node / part
+    return node.read_text(encoding="utf-8")
+
+
+def _build_code_viewer_html() -> str:
+    """Assemble the self-contained code-viewer HTML by inlining the vendored
+    Blockly runtime and the read-only viewer bundle into their markers.
+
+    The injected JS is escaped so any literal ``</script>`` inside the libraries
+    cannot terminate the inlining ``<script>`` tag.
+    """
+    html = _read_ui_resource("code_viewer.html")
+    for marker, asset in _VIEWER_ASSET_MARKERS:
+        js = _read_ui_asset(asset).replace("</script", "<\\/script")
+        html = html.replace(marker, js)
+    return html
+
+
 @mcp.resource(
     _ANSWER_VIEWER_RESOURCE_URI,
     name="blawx-answer-viewer",
@@ -91,6 +130,19 @@ async def blawx_answer_viewer_resource() -> str:
     """Standalone MCP Apps UI for exploring cached Blawx answer responses."""
 
     return _read_ui_resource("answer_viewer.html")
+
+
+@mcp.resource(
+    _CODE_VIEWER_RESOURCE_URI,
+    name="blawx-code-viewer",
+    title=_CODE_VIEWER_TITLE,
+    description=_CODE_VIEWER_DESCRIPTION,
+    mime_type=_CODE_VIEWER_MIME_TYPE,
+)
+async def blawx_code_viewer_resource() -> str:
+    """Self-contained MCP Apps UI that renders a Blawx workspace read-only."""
+
+    return _build_code_viewer_html()
 
 
 @mcp.tool(structured_output=False)
@@ -258,6 +310,14 @@ def _extract_cache_key(body: Any) -> str:
 def _answer_viewer_tool_result(result: dict[str, Any]) -> CallToolResult:
     return CallToolResult(
         _meta=_ANSWER_VIEWER_META,
+        content=[],
+        structuredContent=result,
+    )
+
+
+def _code_viewer_tool_result(result: dict[str, Any]) -> CallToolResult:
+    return CallToolResult(
+        _meta=_CODE_VIEWER_META,
         content=[],
         structuredContent=result,
     )
@@ -1365,6 +1425,56 @@ async def blawx_view_answers(
     return _answer_viewer_tool_result(result)
 
 
+@mcp.tool(meta=_CODE_VIEWER_META)
+async def blawx_view_code(
+    blawx_json: dict[str, Any],
+    title: str | None = None,
+    known_objects_list: list[Any] | None = None,
+    known_relationship_dict: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Render an arbitrary chunk of Blawx code in the read-only Blawx code viewer.
+
+    Use this to let the user *see* Blawx code as rendered Blawx blocks instead of
+    raw JSON. The `blawx_json` argument is a Blockly workspace serialization (the
+    `blawx_json` object the editors use). It can be:
+      - code you authored, or
+      - the `blawx_json` field from the `body` of a read tool such as
+        `blawx_question_detail`, `blawx_fact_scenario_detail`, or
+        `blawx_encodingpart_get`.
+
+    `blawx_json` must be the full workspace object (it has a top-level `blocks`
+    key). `title` sets the heading. `known_objects_list` and
+    `known_relationship_dict` are optional and only affect type-checking parity
+    with the editors; they are not required for display.
+
+    This tool carries the code-viewer UI metadata, so a host that supports MCP
+    Apps renders the viewer. It does not call the Blawx server.
+    """
+
+    if not isinstance(blawx_json, dict) or "blocks" not in blawx_json:
+        return _code_viewer_tool_result(
+            {
+                "ok": False,
+                "error": (
+                    "blawx_json must be a Blockly workspace object with a top-level "
+                    "'blocks' key (the same shape stored in a question, fact "
+                    "scenario, or encoding part `blawx_json` field)."
+                ),
+                "blawx_json": blawx_json,
+            }
+        )
+
+    return _code_viewer_tool_result(
+        {
+            "ok": True,
+            "title": title or _CODE_VIEWER_TITLE,
+            "blawx_json": blawx_json,
+            "known_objects_list": known_objects_list or [],
+            "known_relationship_dict": known_relationship_dict or {},
+        }
+    )
+
+
 @mcp.tool()
 async def blawx_list_answers(team_slug: str, project_id: int, question_id: int, cache_key: str) -> dict[str, Any]:
     """List answers for a previously asked question.
@@ -2127,7 +2237,8 @@ def _log_loaded_tools(logger: logging.Logger) -> None:
     logger.info(
         "Loaded tools: health, team project discovery, ontology (read + read-write CRUD), "
         "facts (read + CRUD), questions (read shared + CRUD), ask/answers/explanations, "
-        "legaldocs (read + CRUD), legaldocparts (read + CRUD), encoding (read-write)"
+        "legaldocs (read + CRUD), legaldocparts (read + CRUD), encoding (read-write), "
+        "code viewer (read-only Blawx block visualization)"
     )
     logger.info(
         "Config via env: BLAWX_BASE_URL (default https://app.blawx.dev), BLAWX_API_KEY"

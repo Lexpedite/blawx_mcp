@@ -1,6 +1,6 @@
 [project]
 name = "blawx-mcp"
-version = "0.5.0"
+version = "0.6.0"
 description = "Local MCP server for Blawx app API"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -27,7 +27,14 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-blawx_mcp = ["md_guides/*.md", "ui/*.html"]
+blawx_mcp = [
+  "md_guides/*.md",
+  "ui/*.html",
+  "ui/*.js",
+  "ui/vendor/blockly/*.js",
+  "ui/vendor/blockly/msg/*.js",
+  "ui/vendor/blockly/*.txt",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

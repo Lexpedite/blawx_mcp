@@ -302,6 +302,36 @@ is separated out. You may need to ask your agent to seek it
 specifically if you know your encoding uses constraints and
 you need to know how they are satisfied.
 
+### Visualize Blawx Code
+
+Blawx code (questions, fact scenarios, and encoding parts) is stored as a Blockly
+workspace in a `blawx_json` field. To let the user *see* that code as rendered
+Blawx blocks instead of raw JSON, use the read-only code viewer.
+
+- `blawx_view_code`: renders an arbitrary `blawx_json` workspace as read-only
+	Blawx blocks (no toolbox, no editing). It carries MCP App UI metadata, so a host
+	that supports MCP Apps renders the viewer in-frame. This tool does not call the
+	Blawx server.
+
+The `blawx_json` argument is the full Blockly workspace object (it has a top-level
+`blocks` key). It can be code your agent authored, or — more commonly — the
+`blawx_json` value from the `body` of a read tool such as `blawx_question_detail`,
+`blawx_fact_scenario_detail`, or `blawx_encodingpart_get`. Optional `title`,
+`known_objects_list`, and `known_relationship_dict` arguments are accepted; only
+`blawx_json` is required.
+
+```json
+{
+	"blawx_json": { "blocks": { "languageVersion": 0, "blocks": [ "..." ] } },
+	"title": "Section 4 encoding"
+}
+```
+
+The viewer is served as a self-contained MCP App resource (`ui://blawx/code-viewer`)
+with the Blockly runtime and Blawx block definitions inlined, so it needs no
+network access at render time. The bundled block definitions are generated from
+the `blawx_saas` repo; see `src/blawx_mcp/ui/VENDOR.md` for how to refresh them.
+
 ### Legal Docs + Encoding
 
 The API supports read-write legal documents, legal document parts, and encoding parts, and this MCP server now exposes CRUD tools for all three layers.
