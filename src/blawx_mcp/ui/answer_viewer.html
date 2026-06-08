@@ -49,6 +49,13 @@
       color: var(--text);
       font-size: 14px;
       line-height: 1.45;
+      /* The host sizes the app frame to its content height. Before the answers
+         load asynchronously the document is nearly empty, which would lock the
+         frame to a tiny height. Reserve a plausible-ratio block of space using
+         the frame's own width (vw), clamped so it stays sane on narrow chat
+         panels and wide windows. It's only a floor, so the frame still grows
+         once content arrives. */
+      min-height: clamp(360px, 70vw, 680px);
     }
 
     button {
