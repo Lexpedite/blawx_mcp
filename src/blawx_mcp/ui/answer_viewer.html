@@ -49,6 +49,13 @@
       color: var(--text);
       font-size: 14px;
       line-height: 1.45;
+      /* The host sizes the app frame to its content height. Before the answers
+         load asynchronously the document is nearly empty, which would lock the
+         frame to a tiny height. Reserve a plausible-ratio block of space using
+         the frame's own width (vw), clamped so it stays sane on narrow chat
+         panels and wide windows. It's only a floor, so the frame still grows
+         once content arrives. */
+      min-height: clamp(360px, 70vw, 680px);
     }
 
     button {
@@ -898,6 +905,31 @@
         loadAnswers();
       }
     }
+
+    function openExternalLink(url) {
+      // The app runs in a sandboxed iframe (allow-scripts, allow-same-origin)
+      // without allow-popups/allow-top-navigation, so a normal click on a
+      // target=_blank link is silently blocked by the browser. Ask the host to
+      // open it via the MCP Apps (SEP-1865) ui/open-link bridge, which ChatGPT,
+      // Claude, and other spec hosts all speak. If a host doesn't honour it,
+      // behaviour is unchanged (right-click still offers "Open in browser").
+      window.parent.postMessage(
+        { jsonrpc: "2.0", id: state.nextId++, method: "ui/open-link", params: { url: url } },
+        "*"
+      );
+    }
+
+    document.addEventListener("click", (event) => {
+      if (event.defaultPrevented || event.button !== 0) return;
+      const anchor = event.target && event.target.closest ? event.target.closest("a[href]") : null;
+      if (!anchor) return;
+      const href = anchor.getAttribute("href") || "";
+      // Leave in-page (#...) anchors to the browser; route real external links
+      // through the host so they actually open.
+      if (!/^(https?:|mailto:)/i.test(href)) return;
+      event.preventDefault();
+      openExternalLink(href);
+    });
 
     window.addEventListener("message", (event) => {
       const message = event.data || {};

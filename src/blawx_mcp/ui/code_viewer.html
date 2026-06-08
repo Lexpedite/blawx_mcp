@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Open every link in a separate browser window/tab, not the embedded chat frame. -->
+  <base target="_blank">
+  <title>Blawx Code Viewer</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f8fafc;
+      --panel: #ffffff;
+      --text: #172033;
+      --muted: #5d6679;
+      --line: #d8dde8;
+      --accent: #246b5a;
+      --danger: #a53131;
+      --danger-weak: #f8e7e7;
+      --code: #111827;
+      --code-bg: #eef2f7;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111827;
+        --panel: #182235;
+        --text: #edf2f7;
+        --muted: #a8b3c7;
+        --line: #324056;
+        --accent: #72c7b4;
+        --danger: #ff9b9b;
+        --danger-weak: #4b2020;
+        --code: #f8fafc;
+        --code-bg: #0f172a;
+      }
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.45;
+      /* The host sizes the app frame to its content height. Reserve a plausible
+         floor so the frame is not locked tiny before the workspace renders. */
+      min-height: clamp(220px, 50vw, 520px);
+    }
+
+    .app {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 14px;
+    }
+
+    .header { margin-bottom: 10px; }
+
+    .title { margin: 0; font-size: 18px; line-height: 1.2; }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 12px;
+      margin: 10px 0;
+    }
+
+    .error {
+      background: var(--danger-weak);
+      border-color: var(--danger);
+    }
+
+    .empty { color: var(--muted); padding: 8px 0; }
+
+    pre {
+      margin: 8px 0 0;
+      padding: 10px;
+      overflow: auto;
+      border-radius: 6px;
+      background: var(--code-bg);
+      color: var(--code);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    /* Overlay pattern: blocklyDiv is sized by the viewer bundle to fit content. */
+    #blocklyArea {
+      position: relative;
+      width: 100%;
+      min-height: 200px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--panel);
+    }
+
+    #blocklyDiv {
+      width: 100%;
+      height: 240px;
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <div class="header">
+      <h1 class="title" id="title">Blawx Code Viewer</h1>
+    </div>
+    <section id="status" class="panel" hidden></section>
+    <div id="blocklyArea"><div id="blocklyDiv"></div></div>
+  </main>
+
+  <!-- Vendored Blockly runtime (loaded as globals), then the read-only viewer
+       bundle. The server inlines each marker with the corresponding JS so the
+       resource is fully self-contained (no network at runtime). -->
+  <script>/*BLOCKLY_CORE*/</script>
+  <script>/*BLOCKLY_MSG*/</script>
+  <script>/*BLOCKLY_BLOCKS*/</script>
+  <script>/*VIEWER_BUNDLE*/</script>
+
+  <script>
+    const state = {
+      toolInput: null,
+      toolResult: null,
+      rendered: false,
+      nextId: 1
+    };
+
+    const el = {
+      status: document.getElementById("status"),
+      title: document.getElementById("title"),
+      area: document.getElementById("blocklyArea"),
+      div: document.getElementById("blocklyDiv")
+    };
+
+    function showError(message, detail) {
+      el.status.hidden = false;
+      el.status.classList.add("error");
+      el.status.textContent = "";
+      const strong = document.createElement("strong");
+      strong.textContent = message;
+      el.status.appendChild(strong);
+      if (detail !== undefined && detail !== null) {
+        const pre = document.createElement("pre");
+        pre.textContent = typeof detail === "string" ? detail : JSON.stringify(detail, null, 2);
+        el.status.appendChild(pre);
+      }
+      el.area.hidden = true;
+    }
+
+    function unwrapToolResult(result) {
+      if (!result) return result;
+      if (result.type === "json" && Object.prototype.hasOwnProperty.call(result, "value")) {
+        return unwrapToolResult(result.value);
+      }
+      if (result.structuredContent) return result.structuredContent;
+      if (result.structured_content) return result.structured_content;
+      if (result.content && result.content.length === 1 && result.content[0].text) {
+        try {
+          return JSON.parse(result.content[0].text);
+        } catch (_err) {
+          return { body: result.content[0].text };
+        }
+      }
+      return result;
+    }
+
+    function reportHeight() {
+      // Best-effort: ask the host to resize the frame to our content. Hosts that
+      // auto-measure ignore this; it is harmless where unsupported.
+      const height = Math.ceil(document.body.scrollHeight);
+      window.parent.postMessage(
+        { jsonrpc: "2.0", method: "ui/size-frame", params: { height: height } },
+        "*"
+      );
+    }
+
+    function renderWorkspace() {
+      if (state.rendered) return;
+      const result = state.toolResult || {};
+
+      if (!result || result.ok === false) {
+        showError(
+          "No Blawx code was provided to render.",
+          result.error || result.body || result
+        );
+        return;
+      }
+
+      const blawxJson = result.blawx_json;
+      if (!blawxJson || typeof blawxJson !== "object") {
+        showError(
+          "The tool result did not include a blawx_json workspace object.",
+          result
+        );
+        return;
+      }
+
+      if (!(window.SiteJS && window.SiteJS.viewer && typeof window.SiteJS.viewer.renderBlawxWorkspace === "function")) {
+        showError("The Blawx viewer bundle did not load.");
+        return;
+      }
+
+      if (typeof result.title === "string" && result.title.trim()) {
+        el.title.textContent = result.title.trim();
+      }
+
+      try {
+        el.status.hidden = true;
+        el.area.hidden = false;
+        const out = window.SiteJS.viewer.renderBlawxWorkspace(el.div, blawxJson, {
+          known_objects_list: result.known_objects_list || [],
+          known_relationship_dict: result.known_relationship_dict || {}
+        });
+        if (out && out.height) {
+          el.area.style.height = out.height + "px";
+        }
+        state.rendered = true;
+        // Allow layout to settle, then report content height.
+        requestAnimationFrame(() => requestAnimationFrame(reportHeight));
+      } catch (err) {
+        showError("Could not render the Blawx workspace.", (err && err.message) || String(err));
+      }
+    }
+
+    function receiveToolInput(input) {
+      if (input) state.toolInput = input;
+      maybeRender();
+    }
+
+    function receiveToolResult(result) {
+      const unwrapped = unwrapToolResult(result);
+      if (unwrapped) state.toolResult = unwrapped;
+      maybeRender();
+    }
+
+    function maybeRender() {
+      if (state.toolResult) renderWorkspace();
+    }
+
+    window.addEventListener("message", (event) => {
+      const message = event.data || {};
+      const method = String(message.method || "");
+      const params = message.params || {};
+      if (method.endsWith("tool-input")) receiveToolInput(params.arguments || params);
+      if (method.endsWith("tool-result")) {
+        receiveToolResult(params.structuredContent || params.structured_content || params);
+      }
+    });
+
+    if (window.openai) {
+      receiveToolInput(window.openai.toolInput);
+      receiveToolResult(window.openai.toolOutput);
+      window.addEventListener("openai:set_globals", () => {
+        receiveToolInput(window.openai.toolInput);
+        receiveToolResult(window.openai.toolOutput);
+      });
+    }
+
+    window.parent.postMessage({ jsonrpc: "2.0", method: "ui/initialize", params: {} }, "*");
+    window.parent.postMessage({ jsonrpc: "2.0", method: "ui/notifications/initialized", params: {} }, "*");
+    maybeRender();
+  </script>
+</body>
+</html>
