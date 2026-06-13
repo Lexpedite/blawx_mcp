@@ -1,6 +1,6 @@
 [project]
 name = "blawx-mcp"
-version = "0.7.1b"
+version = "0.7.1c"
 description = "Local MCP server for Blawx app API"
 readme = "README.md"
 requires-python = ">=3.10"
