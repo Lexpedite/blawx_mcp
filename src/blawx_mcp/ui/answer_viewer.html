@@ -1,5 +1,11 @@
 <!doctype html>
-<html lang="en">
+<!-- TEMPORARY WORKAROUND (anthropics/claude-ai-mcp #69): claude.ai sizes the
+     app frame by reading documentElement height directly off the DOM, ignoring
+     ui/notifications/size-changed, and snapshots that height early. A fixed
+     min-height written inline on <html> guarantees a sensible floor at parse
+     time — before any JS, on the exact element claude.ai measures. Fixed px,
+     not vh/vw: viewport units create a circular dependency in a tiny iframe. -->
+<html lang="en" style="min-height: 600px;">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -49,13 +55,10 @@
       color: var(--text);
       font-size: 14px;
       line-height: 1.45;
-      /* The host sizes the app frame to its content height. Before the answers
-         load asynchronously the document is nearly empty, which would lock the
-         frame to a tiny height. Reserve a plausible-ratio block of space using
-         the frame's own width (vw), clamped so it stays sane on narrow chat
-         panels and wide windows. It's only a floor, so the frame still grows
-         once content arrives. */
-      min-height: clamp(360px, 70vw, 680px);
+      /* Mirror the fixed floor set inline on <html> (see top of file). Fixed
+         px, never viewport units, so a tiny initial iframe can't keep the frame
+         small. It's only a floor; the frame still grows once content arrives. */
+      min-height: 600px;
     }
 
     button {

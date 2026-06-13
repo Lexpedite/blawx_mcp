@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows Semantic Versioning.
 
+## [0.7.1c] - 2026-06-13
+
+### Fixed
+- Guaranteed a minimum frame height for both MCP App viewers (`ui/answer_viewer.html`, `ui/code_viewer.html`) in claude.ai. The 0.7.1b measurement-and-write approach ran too late: claude.ai snapshots the `documentElement` height early, so writing it from JS after the first paint (before async answers/Blockly render) couldn't reliably set a floor. Each viewer now carries a fixed `min-height` written inline on the `<html>` element itself — present at parse time, on the exact element claude.ai measures, in fixed px rather than viewport units (which create a circular sizing dependency in a small iframe). The post-render measurement and `ui/notifications/size-changed` post remain to grow the frame and serve spec-compliant hosts.
+
 ## [0.7.1b] - 2026-06-08
 
 ### Fixed
